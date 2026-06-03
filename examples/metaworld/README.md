@@ -19,8 +19,8 @@ MetaWorld uses the root repo venv.
 ## Setup
 
 ```bash
-git submodule update --init --recursive
-GIT_LFS_SKIP_SMUDGE=1 uv sync
+GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
+uv sync
 ```
 
 Use EGL for GPU rendering:

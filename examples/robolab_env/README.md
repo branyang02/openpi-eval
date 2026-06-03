@@ -18,7 +18,7 @@ This example uses the latest RoboLab submodule and its Pi0-family runner. The si
 ## Setup
 
 ```bash
-git submodule update --init --recursive third_party/robolab
+GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive third_party/robolab
 git -C third_party/robolab lfs pull
 
 cd examples/robolab_env
@@ -26,7 +26,7 @@ uv venv --python 3.11
 uv sync
 ```
 
-RoboLab installs Isaac Sim 5.0 and Isaac Lab 2.2.0 through `uv`. The RoboLab assets are about 7 GB.
+RoboLab installs Isaac Sim 5.0 and Isaac Lab 2.2.0 through `uv`. The RoboLab assets are about 7 GB. Full evaluation is expected on Linux NVIDIA GPU hosts.
 
 ## Configs
 
@@ -36,7 +36,7 @@ Registered configs:
 - `pi0_droid_jointpos`
 - `pi0_fast_droid_jointpos`
 
-`pi05_droid_jointpos` is the default for release evaluation.
+`pi05_droid_jointpos` is the default example config for the commands below.
 
 ## Serve
 

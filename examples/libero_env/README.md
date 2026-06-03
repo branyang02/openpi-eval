@@ -25,6 +25,8 @@ uv sync
 uv run python setup_libero_config.py
 ```
 
+`setup_libero_config.py` writes `~/.libero/config.yaml` for the active checkout.
+
 Use EGL for GPU rendering:
 
 ```bash
