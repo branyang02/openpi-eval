@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="638" viewBox="0 0 980 638" role="img" aria-labelledby="robocasa-atomic-seen-tasks-title robocasa-atomic-seen-tasks-desc">
+<title id="robocasa-atomic-seen-tasks-title">RoboCasa pi05 Atomic Seen Tasks</title>
+<desc id="robocasa-atomic-seen-tasks-desc">Mean success rate: 29.9% across 18 tasks.</desc>
+<rect width="980" height="638" fill="#ffffff"/>
+<text x="24" y="34" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#111827">RoboCasa pi05 Atomic Seen Tasks</text>
+<text x="24" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6b7280">Mean success rate: 29.9% across 18 tasks.</text>
+<line x1="270.0" y1="72" x2="270.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="270.0" y="620" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">0</text>
+<line x1="423.5" y1="72" x2="423.5" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="423.5" y="620" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">25</text>
+<line x1="577.0" y1="72" x2="577.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="577.0" y="620" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">50</text>
+<line x1="730.5" y1="72" x2="730.5" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="730.5" y="620" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">75</text>
+<line x1="884.0" y1="72" x2="884.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="884.0" y="620" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">100</text>
+<text x="254" y="105" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">PickPlaceSinkToCounter</text>
+<rect x="270" y="94" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="94" width="448.2" height="14" rx="2" fill="#7c3aed"/>
+<text x="726.2" y="105" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">73.0%</text>
+<text x="254" y="133" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">TurnOnSinkFaucet</text>
+<rect x="270" y="122" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="122" width="448.2" height="14" rx="2" fill="#7c3aed"/>
+<text x="726.2" y="133" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">73.0%</text>
+<text x="254" y="161" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">OpenStandMixerHead</text>
+<rect x="270" y="150" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="150" width="325.4" height="14" rx="2" fill="#7c3aed"/>
+<text x="603.4" y="161" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">53.0%</text>
+<text x="254" y="189" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">SlideDishwasherRack</text>
+<rect x="270" y="178" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="178" width="325.4" height="14" rx="2" fill="#7c3aed"/>
+<text x="603.4" y="189" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">53.0%</text>
+<text x="254" y="217" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">PickPlaceToasterToCounter</text>
+<rect x="270" y="206" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="206" width="288.6" height="14" rx="2" fill="#7c3aed"/>
+<text x="566.6" y="217" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">47.0%</text>
+<text x="254" y="245" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">PickPlaceCounterToCabinet</text>
+<rect x="270" y="234" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="234" width="245.6" height="14" rx="2" fill="#7c3aed"/>
+<text x="523.6" y="245" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">40.0%</text>
+<text x="254" y="273" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">OpenDrawer</text>
+<rect x="270" y="262" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="262" width="202.6" height="14" rx="2" fill="#7c3aed"/>
+<text x="480.6" y="273" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">33.0%</text>
+<text x="254" y="301" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">PickPlaceCounterToStove</text>
+<rect x="270" y="290" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="290" width="202.6" height="14" rx="2" fill="#7c3aed"/>
+<text x="480.6" y="301" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">33.0%</text>
+<text x="254" y="329" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">CloseToasterOvenDoor</text>
+<rect x="270" y="318" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="318" width="165.8" height="14" rx="2" fill="#7c3aed"/>
+<text x="443.8" y="329" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">27.0%</text>
+<text x="254" y="357" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">CoffeeSetupMug</text>
+<rect x="270" y="346" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="346" width="165.8" height="14" rx="2" fill="#7c3aed"/>
+<text x="443.8" y="357" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">27.0%</text>
+<text x="254" y="385" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">TurnOffStove</text>
+<rect x="270" y="374" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="374" width="122.8" height="14" rx="2" fill="#7c3aed"/>
+<text x="400.8" y="385" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">20.0%</text>
+<text x="254" y="413" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">TurnOnElectricKettle</text>
+<rect x="270" y="402" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="402" width="122.8" height="14" rx="2" fill="#7c3aed"/>
+<text x="400.8" y="413" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">20.0%</text>
+<text x="254" y="441" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">CloseFridge</text>
+<rect x="270" y="430" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="430" width="79.8" height="14" rx="2" fill="#7c3aed"/>
+<text x="357.8" y="441" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">13.0%</text>
+<text x="254" y="469" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">PickPlaceDrawerToCounter</text>
+<rect x="270" y="458" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="458" width="79.8" height="14" rx="2" fill="#7c3aed"/>
+<text x="357.8" y="469" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">13.0%</text>
+<text x="254" y="497" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">OpenCabinet</text>
+<rect x="270" y="486" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="486" width="43.0" height="14" rx="2" fill="#7c3aed"/>
+<text x="321.0" y="497" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">7.0%</text>
+<text x="254" y="525" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">TurnOnMicrowave</text>
+<rect x="270" y="514" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="514" width="43.0" height="14" rx="2" fill="#7c3aed"/>
+<text x="321.0" y="525" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">7.0%</text>
+<text x="254" y="553" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">CloseBlenderLid</text>
+<rect x="270" y="542" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="542" width="0.0" height="14" rx="2" fill="#7c3aed"/>
+<text x="278.0" y="553" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">0.0%</text>
+<text x="254" y="581" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">NavigateKitchen</text>
+<rect x="270" y="570" width="614" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="270" y="570" width="0.0" height="14" rx="2" fill="#7c3aed"/>
+<text x="278.0" y="581" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">0.0%</text>
+<text x="577.0" y="634" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">success rate (%)</text>
+</svg>

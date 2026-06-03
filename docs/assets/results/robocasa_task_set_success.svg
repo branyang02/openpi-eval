@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="218" viewBox="0 0 980 218" role="img" aria-labelledby="robocasa-task-set-success-title robocasa-task-set-success-desc">
+<title id="robocasa-task-set-success-title">RoboCasa pi05 Task Sets</title>
+<desc id="robocasa-task-set-success-desc">Mean success rates for atomic and composite pretrain evaluations.</desc>
+<rect width="980" height="218" fill="#ffffff"/>
+<text x="24" y="34" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#111827">RoboCasa pi05 Task Sets</text>
+<text x="24" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6b7280">Mean success rates for atomic and composite pretrain evaluations.</text>
+<line x1="220.0" y1="72" x2="220.0" y2="180" stroke="#e5e7eb" stroke-width="1"/>
+<text x="220.0" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">0</text>
+<line x1="386.0" y1="72" x2="386.0" y2="180" stroke="#e5e7eb" stroke-width="1"/>
+<text x="386.0" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">25</text>
+<line x1="552.0" y1="72" x2="552.0" y2="180" stroke="#e5e7eb" stroke-width="1"/>
+<text x="552.0" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">50</text>
+<line x1="718.0" y1="72" x2="718.0" y2="180" stroke="#e5e7eb" stroke-width="1"/>
+<text x="718.0" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">75</text>
+<line x1="884.0" y1="72" x2="884.0" y2="180" stroke="#e5e7eb" stroke-width="1"/>
+<text x="884.0" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">100</text>
+<text x="204" y="105" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">atomic_seen</text>
+<rect x="220" y="94" width="664" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="220" y="94" width="198.8" height="14" rx="2" fill="#f97316"/>
+<text x="426.8" y="105" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">29.9%</text>
+<text x="204" y="133" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">composite_seen</text>
+<rect x="220" y="122" width="664" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="220" y="122" width="22.0" height="14" rx="2" fill="#f97316"/>
+<text x="250.0" y="133" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">3.3%</text>
+<text x="204" y="161" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">composite_unseen</text>
+<rect x="220" y="150" width="664" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="220" y="150" width="5.8" height="14" rx="2" fill="#f97316"/>
+<text x="233.8" y="161" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">0.9%</text>
+<text x="552.0" y="214" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">success rate (%)</text>
+</svg>

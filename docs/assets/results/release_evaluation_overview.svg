@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="470" viewBox="0 0 980 470" role="img" aria-labelledby="release-evaluation-overview-title release-evaluation-overview-desc">
+<title id="release-evaluation-overview-title">Release Evaluation Results</title>
+<desc id="release-evaluation-overview-desc">Mean success rates from current results.json outputs; released checkpoints only.</desc>
+<rect width="980" height="470" fill="#ffffff"/>
+<text x="24" y="34" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#111827">Release Evaluation Results</text>
+<text x="24" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6b7280">Mean success rates from current results.json outputs; released checkpoints only.</text>
+<line x1="310.0" y1="72" x2="310.0" y2="432" stroke="#e5e7eb" stroke-width="1"/>
+<text x="310.0" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">0</text>
+<line x1="453.5" y1="72" x2="453.5" y2="432" stroke="#e5e7eb" stroke-width="1"/>
+<text x="453.5" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">25</text>
+<line x1="597.0" y1="72" x2="597.0" y2="432" stroke="#e5e7eb" stroke-width="1"/>
+<text x="597.0" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">50</text>
+<line x1="740.5" y1="72" x2="740.5" y2="432" stroke="#e5e7eb" stroke-width="1"/>
+<text x="740.5" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">75</text>
+<line x1="884.0" y1="72" x2="884.0" y2="432" stroke="#e5e7eb" stroke-width="1"/>
+<text x="884.0" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">100</text>
+<text x="294" y="105" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">MetaWorld pi05 ML45 train</text>
+<rect x="310" y="94" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="94" width="523.8" height="14" rx="2" fill="#2563eb"/>
+<text x="841.8" y="105" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">91.3%</text>
+<text x="294" y="133" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi05 spatial</text>
+<rect x="310" y="122" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="122" width="558.5" height="14" rx="2" fill="#2563eb"/>
+<text x="876.5" y="133" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">97.3%</text>
+<text x="294" y="161" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi05 object</text>
+<rect x="310" y="150" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="150" width="566.0" height="14" rx="2" fill="#2563eb"/>
+<text x="884.0" y="161" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">98.6%</text>
+<text x="294" y="189" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi05 goal</text>
+<rect x="310" y="178" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="178" width="558.5" height="14" rx="2" fill="#2563eb"/>
+<text x="876.5" y="189" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">97.3%</text>
+<text x="294" y="217" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi05 10</text>
+<rect x="310" y="206" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="206" width="527.5" height="14" rx="2" fill="#2563eb"/>
+<text x="845.5" y="217" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">91.9%</text>
+<text x="294" y="245" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi0-FAST spatial</text>
+<rect x="310" y="234" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="234" width="535.5" height="14" rx="2" fill="#16a34a"/>
+<text x="853.5" y="245" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">93.3%</text>
+<text x="294" y="273" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi0-FAST object</text>
+<rect x="310" y="262" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="262" width="550.5" height="14" rx="2" fill="#16a34a"/>
+<text x="868.5" y="273" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">95.9%</text>
+<text x="294" y="301" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi0-FAST goal</text>
+<rect x="310" y="290" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="290" width="528.1" height="14" rx="2" fill="#16a34a"/>
+<text x="846.1" y="301" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">92.0%</text>
+<text x="294" y="329" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">LIBERO pi0-FAST 10</text>
+<rect x="310" y="318" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="318" width="360.5" height="14" rx="2" fill="#16a34a"/>
+<text x="678.5" y="329" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">62.8%</text>
+<text x="294" y="357" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">RoboCasa pi05 atomic_seen</text>
+<rect x="310" y="346" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="346" width="171.9" height="14" rx="2" fill="#f97316"/>
+<text x="489.9" y="357" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">29.9%</text>
+<text x="294" y="385" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">RoboCasa pi05 composite_seen</text>
+<rect x="310" y="374" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="374" width="19.0" height="14" rx="2" fill="#f97316"/>
+<text x="337.0" y="385" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">3.3%</text>
+<text x="294" y="413" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">RoboCasa pi05 composite_unseen</text>
+<rect x="310" y="402" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="402" width="5.0" height="14" rx="2" fill="#f97316"/>
+<text x="323.0" y="413" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">0.9%</text>
+<text x="597.0" y="466" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">success rate (%)</text>
+</svg>

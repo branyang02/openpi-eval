@@ -104,6 +104,12 @@ examples/libero_env/output/<task_suite_name>/
 Generated results are written to `examples/libero_env/output/` and should be
 published only after a fresh release evaluation.
 
+## Results
+
+Current release suite evaluations from `results.json`.
+
+<img src="../../docs/assets/results/libero_suite_success.svg" alt="LIBERO suite success rates" width="900">
+
 ## Tests
 
 ```bash

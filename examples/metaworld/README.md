@@ -92,3 +92,9 @@ Outputs default to `examples/metaworld/output/`. `results.json` is saved increme
 
 Generated results are written to `examples/metaworld/output/` and should be
 published only after a fresh release evaluation.
+
+## Results
+
+Current release `pi05_metaworld` ML45 train evaluation from `results.json`.
+
+<img src="../../docs/assets/results/metaworld_pi05_ml45_tasks.svg" alt="MetaWorld pi05 ML45 per-task success rates" width="900">
