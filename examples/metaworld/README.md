@@ -26,36 +26,31 @@ export MUJOCO_GL=egl
 The training config expects the LeRobot dataset [`brandonyang/metaworld_ml45`](https://huggingface.co/datasets/brandonyang/metaworld_ml45).
 
 ```bash
+# pi0.5 training
 uv run scripts/compute_norm_stats.py --config-name pi05_metaworld
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi05_metaworld \
     --exp-name pi05_metaworld_test \
     --overwrite \
     --num_train_steps 30000
+
+# pi0-FAST training example. No converged MetaWorld pi0-FAST checkpoint is
+# included in this release.
+uv run scripts/compute_norm_stats.py --config-name pi0_fast_metaworld
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_metaworld \
+    --exp-name pi0_fast_metaworld_train \
+    --overwrite \
+    --num_train_steps 30000
 ```
-
-Registered configs:
-
-- `pi05_metaworld`
-- `pi0_fast_metaworld`
 
 ## Checkpoints
 
 - `pi05_metaworld`: [`brandonyang/openpi-metaworld-25000`](https://huggingface.co/brandonyang/openpi-metaworld-25000)
-- `pi0_fast_metaworld`: `2500` from [`brandonyang/pi0fast-metaworld-checkpoints`](https://huggingface.co/brandonyang/pi0fast-metaworld-checkpoints).
 
 Download pi0.5:
 
 ```bash
 hf download brandonyang/openpi-metaworld-25000 \
     --local-dir checkpoints/openpi-metaworld-25000
-```
-
-Download pi0-FAST:
-
-```bash
-hf download brandonyang/pi0fast-metaworld-checkpoints \
-    --include "pi0_fast_metaworld_b200_bs512/2500/*" \
-    --local-dir checkpoints/pi0fast-metaworld-checkpoints
 ```
 
 ## Serve
@@ -72,11 +67,6 @@ uv run scripts/serve_policy.py policy:checkpoint \
 uv run scripts/serve_policy.py --pytorch policy:checkpoint \
     --policy.config=pi05_metaworld \
     --policy.dir=/path/to/checkpoint
-
-# pi0-FAST, JAX only
-uv run scripts/serve_policy.py policy:checkpoint \
-    --policy.config=pi0_fast_metaworld \
-    --policy.dir=checkpoints/pi0fast-metaworld-checkpoints/pi0_fast_metaworld_b200_bs512/2500
 ```
 
 ## Evaluate
