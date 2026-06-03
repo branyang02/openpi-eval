@@ -16,14 +16,14 @@ Usage:
     python examples/convert_jax_model_to_pytorch.py --checkpoint_dir /path/to/checkpoint --output_path /path/to/output
 
 Example:
-    # pi0_droid
-    python examples/convert_jax_model_to_pytorch.py --checkpoint_dir /home/$USER/.cache/openpi/openpi-assets/checkpoints/pi0_droid --output_path /home/$USER/.cache/openpi/openpi-assets/checkpoints/pi0_droid_pytorch
+    # pi05_libero
+    python examples/convert_jax_model_to_pytorch.py --checkpoint_dir checkpoints/openpi-libero-9000 --output_path checkpoints/openpi-libero-9000
 
-    # pi0_aloha_sim
-    python examples/convert_jax_model_to_pytorch.py --checkpoint_dir /home/$USER/.cache/openpi/openpi-assets/checkpoints/pi0_aloha_sim --output_path /home/$USER/.cache/openpi/openpi-assets/checkpoints/pi0_aloha_sim_pytorch
+    # pi05_metaworld
+    python examples/convert_jax_model_to_pytorch.py --checkpoint_dir checkpoints/openpi-metaworld-25000 --output_path checkpoints/openpi-metaworld-25000
 
-    # pi05_droid
-    python examples/convert_jax_model_to_pytorch.py --checkpoint_dir /home/$USER/.cache/openpi/openpi-assets/checkpoints/pi05_droid --output_path /home/$USER/.cache/openpi/openpi-assets/checkpoints/pi05_droid_pytorch
+    # pi05_robocasa
+    python examples/convert_jax_model_to_pytorch.py --checkpoint_dir checkpoints/pi05_pretrain_human300/multitask_learning/75000 --output_path checkpoints/pi05_pretrain_human300/multitask_learning/75000
 """
 
 import json
@@ -290,7 +290,7 @@ def slice_gemma_state_dict(state_dict, config, *, num_expert, checkpoint_dir, pi
     llm_mlp_linear = state_dict.pop(f"llm/layers/mlp_{num_expert}/linear{suffix}")
 
     # Check if we have Dense layers (for pi05/adaptive normalization) or scale layers (for regular pi0)
-    if "pi05" in checkpoint_dir:
+    if pi05:
         # Pi05 with adaptive normalization
         llm_input_layernorm_bias = state_dict.pop(f"llm/layers/pre_attention_norm_{num_expert}/Dense_0/bias{suffix}")
         llm_post_attention_layernorm_bias = state_dict.pop(f"llm/layers/pre_ffw_norm_{num_expert}/Dense_0/bias{suffix}")
@@ -345,7 +345,7 @@ def slice_gemma_state_dict(state_dict, config, *, num_expert, checkpoint_dir, pi
             i
         ].transpose()
 
-        if "pi05" in checkpoint_dir:
+        if pi05:
             # Pi05 with adaptive normalization - use Dense layer parameters directly
             state_dict[f"paligemma_with_expert.gemma_expert.model.layers.{i}.input_layernorm.dense.bias"] = (
                 llm_input_layernorm_bias[i]
@@ -369,7 +369,7 @@ def slice_gemma_state_dict(state_dict, config, *, num_expert, checkpoint_dir, pi
             )
 
     # Handle final norm layer
-    if "pi05" in checkpoint_dir:
+    if pi05:
         # Pi05 with adaptive normalization - use Dense layer parameters directly
         final_norm_bias = state_dict.pop(f"llm/final_norm_{num_expert}/Dense_0/bias{suffix}")
         final_norm_kernel = state_dict.pop(f"llm/final_norm_{num_expert}/Dense_0/kernel{suffix}")
@@ -532,10 +532,10 @@ def convert_pi0_checkpoint(
     # Save model weights as SafeTensors using save_model to handle tied weights
     safetensors.torch.save_model(pi0_model, os.path.join(output_path, "model.safetensors"))
 
-    # Copy assets folder if it exists
-    assets_source = pathlib.Path(checkpoint_dir).parent / "assets"
-    if assets_source.exists():
-        assets_dest = pathlib.Path(output_path) / "assets"
+    # Copy assets folder if it exists and source != dest (in-place conversion)
+    assets_source = pathlib.Path(checkpoint_dir) / "assets"
+    assets_dest = pathlib.Path(output_path) / "assets"
+    if assets_source.exists() and assets_source.resolve() != assets_dest.resolve():
         if assets_dest.exists():
             shutil.rmtree(assets_dest)
         shutil.copytree(assets_source, assets_dest)

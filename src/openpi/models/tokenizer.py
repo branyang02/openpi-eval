@@ -140,7 +140,7 @@ class FASTTokenizer:
 
 
 ###########################################################################
-## The tokenizers below are used for RoboArena baseline implementations. ##
+## The tokenizers below support non-FAST action-token baselines.          ##
 ## They are *not* used for pi0-style models.                             ##
 ###########################################################################
 

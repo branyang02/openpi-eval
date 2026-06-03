@@ -1,0 +1,33 @@
+[project]
+name = "robocasa_env"
+version = "0.1.0"
+description = "RoboCasa evaluation client for OpenPI policies"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "robocasa",
+    "robosuite",
+    "openpi-client"
+]
+
+
+[tool.uv.sources]
+robocasa = { path = "../../third_party/robocasa", editable = true }
+robosuite = { path = "../../third_party/robosuite", editable = true }
+openpi-client = { path = "../../packages/openpi-client", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.15.9",
+    "tyro>=1.0.12",
+]
+
+[tool.ruff.lint]
+select = ["I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "manual: requires the robocasa kitchen assets (~10GB) to be downloaded; not run in CI",
+]

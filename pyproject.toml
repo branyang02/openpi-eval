@@ -13,7 +13,6 @@ dependencies = [
     "flatbuffers>=24.3.25",
     "flax==0.10.2",
     "fsspec[gcs]>=2024.6.0",
-    "gym-aloha>=0.1.1",
     "imageio>=2.36.1",
     "jax[cuda12]==0.5.3",
     "jaxtyping==0.2.36",
@@ -53,11 +52,12 @@ dev = [
     "ipywidgets>=8.1.5",
     "matplotlib>=3.10.0",
     "pynvml>=12.0.0",
+    "av>=15.0.0,<16.0.0",
+    "imageio>=2.37.2",
+    "metaworld @ git+https://github.com/branyang02/Metaworld.git@master",
 ]
-rlds = [
-    # NOTE: tensorflow-cpu 2.15.0 only ships cp311 wheels on PyPI.
-    # Use `uv venv --python 3.11` before `uv sync --group rlds`.
-    "dlimp",
+libero-data = [
+    # Used by scripts/convert_libero_data_to_lerobot.py.
     "tensorflow-cpu==2.15.0",
     "tensorflow-datasets==4.9.9",
 ]
@@ -67,11 +67,14 @@ override-dependencies = ["ml-dtypes==0.4.1", "tensorstore==0.1.74"]
 
 [tool.uv.sources]
 openpi-client = { workspace = true }
-lerobot = { git = "https://github.com/huggingface/lerobot", rev = "0cf864870cf29f4738d3ade893e6fd13fbd7cdb5" }
-dlimp = { git = "https://github.com/kvablack/dlimp", rev = "ad72ce3a9b414db2185bc0b38461d4101a65477a" }
+lerobot = { git = "https://github.com/branyang02/lerobot", rev = "d7898d8dfdab7a0ff948659394d5a489bf6b9132" }
 
 [tool.uv.workspace]
 members = ["packages/*"]
+exclude = [
+    "examples/robocasa_env",
+    "examples/libero_env",
+]
 
 [tool.ruff]
 line-length = 120

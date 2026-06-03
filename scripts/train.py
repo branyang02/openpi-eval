@@ -244,7 +244,6 @@ def main(config: _config.TrainConfig):
         functools.partial(train_step, config),
         in_shardings=(replicated_sharding, train_state_sharding, data_sharding),
         out_shardings=(train_state_sharding, replicated_sharding),
-        donate_argnums=(1,),
     )
 
     start_step = int(train_state.step)

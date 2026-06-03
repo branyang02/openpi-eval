@@ -13,7 +13,6 @@ import torch
 
 import openpi.models.model as _model
 import openpi.training.config as _config
-from openpi.training.droid_rlds_dataset import DroidRldsDataset
 import openpi.transforms as _transforms
 
 T_co = TypeVar("T_co", covariant=True)
@@ -151,24 +150,6 @@ def create_torch_dataset(
     return dataset
 
 
-def create_rlds_dataset(
-    data_config: _config.DataConfig,
-    action_horizon: int,
-    batch_size: int,
-    *,
-    shuffle: bool = False,
-) -> Dataset:
-    # At the moment, we only support DROID for RLDS datasets.
-    return DroidRldsDataset(
-        data_dir=data_config.rlds_data_dir,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        action_chunk_size=action_horizon,
-        action_space=data_config.action_space,
-        datasets=data_config.datasets,
-    )
-
-
 def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
@@ -242,17 +223,6 @@ def create_data_loader(
     data_config = config.data.create(config.assets_dirs, config.model)
     logging.info(f"data_config: {data_config}")
 
-    if data_config.rlds_data_dir is not None:
-        return create_rlds_data_loader(
-            data_config,
-            action_horizon=config.model.action_horizon,
-            batch_size=config.batch_size,
-            sharding=sharding,
-            shuffle=shuffle,
-            num_batches=num_batches,
-            skip_norm_stats=skip_norm_stats,
-            framework=framework,
-        )
     return create_torch_data_loader(
         data_config,
         model_config=config.model,
@@ -332,47 +302,6 @@ def create_torch_data_loader(
         num_workers=num_workers,
         seed=seed,
         framework=framework,
-    )
-
-    return DataLoaderImpl(data_config, data_loader)
-
-
-def create_rlds_data_loader(
-    data_config: _config.DataConfig,
-    action_horizon: int,
-    batch_size: int,
-    *,
-    sharding: jax.sharding.Sharding | None = None,
-    skip_norm_stats: bool = False,
-    shuffle: bool = False,
-    num_batches: int | None = None,
-    framework: str = "jax",
-) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
-    """Create an RLDS data loader for training.
-
-    Note: This data loader requires some extra dependencies -- see examples/droid/README_train.md
-
-    Args:
-        data_config: The data configuration.
-        action_horizon: The action horizon.
-        batch_size: The batch size.
-        sharding: The sharding to use for the data loader. If None, the data loader will
-            use a single device sharding.
-        skip_norm_stats: Whether to skip data normalization.
-        shuffle: Whether to shuffle the data.
-        num_batches: Determines the number of batches to return. If the number exceeds the
-            number of batches in the dataset, the data loader will loop over the dataset.
-            If not provided, will iterate over the dataset indefinitely.
-    """
-    if framework == "pytorch":
-        raise NotImplementedError("PyTorch RLDS data loader is not supported yet")
-    dataset = create_rlds_dataset(data_config, action_horizon, batch_size, shuffle=shuffle)
-    dataset = transform_iterable_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, is_batched=True)
-
-    data_loader = RLDSDataLoader(
-        dataset,
-        sharding=sharding,
-        num_batches=num_batches,
     )
 
     return DataLoaderImpl(data_config, data_loader)
@@ -483,52 +412,8 @@ def _worker_init_fn(worker_id: int) -> None:
     os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 
-class RLDSDataLoader:
-    """Shallow wrapper around the DROID data loader to make it compatible with openpi.
-
-    All batching already happens in the DROID dataset, so we don't need to do anything here.
-    """
-
-    def __init__(
-        self,
-        dataset: DroidRldsDataset,
-        *,
-        sharding: jax.sharding.Sharding | None = None,
-        num_batches: int | None = None,
-    ):
-        self._dataset = dataset
-        self._num_batches = num_batches
-
-        if jax.process_count() > 1:
-            raise NotImplementedError("Data loading with multiple processes is not supported.")
-
-        if sharding is None:
-            # Use data parallel sharding by default.
-            sharding = jax.sharding.NamedSharding(
-                jax.sharding.Mesh(jax.devices(), ("B",)),
-                jax.sharding.PartitionSpec("B"),
-            )
-
-        self._sharding = sharding
-        self._num_batches = num_batches
-
-    def __iter__(self):
-        num_items = 0
-        while True:
-            data_iter = iter(self._dataset)
-            while True:
-                if self._num_batches is not None and num_items >= self._num_batches:
-                    return
-                try:
-                    batch = next(data_iter)
-                except StopIteration:
-                    break  # We've exhausted the dataset. Create a new iterator and start over.
-                num_items += 1
-                yield jax.tree.map(lambda x: jax.make_array_from_process_local_data(self._sharding, x), batch)
-
-
 class DataLoaderImpl(DataLoader):
-    def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader | RLDSDataLoader):
+    def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
         self._data_config = data_config
         self._data_loader = data_loader
 

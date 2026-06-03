@@ -1,5 +1,9 @@
+import inspect
 import logging
 import math
+from pathlib import Path
+import shutil
+import sys
 
 import torch
 from torch import Tensor
@@ -7,8 +11,35 @@ from torch import nn
 import torch.nn.functional as F  # noqa: N812
 
 import openpi.models.gemma as _gemma
-from openpi.models_pytorch.gemma_pytorch import PaliGemmaWithExpertModel
 import openpi.models_pytorch.preprocessing_pytorch as _preprocessing
+
+logger = logging.getLogger(__name__)
+
+
+def _ensure_transformers_patched():
+    """Auto-apply the transformers library patch if it is not already installed."""
+    from transformers.models.gemma.modeling_gemma import GemmaRMSNorm
+
+    if "cond_dim" in inspect.signature(GemmaRMSNorm.__init__).parameters:
+        return
+
+    import transformers
+
+    logger.info("Auto-applying transformers library patch for AdaRMS/precision/KV-cache support.")
+    patch_src = Path(__file__).parent / "transformers_replace"
+    transformers_dir = Path(transformers.__file__).parent
+    shutil.copytree(patch_src, transformers_dir, dirs_exist_ok=True)
+
+    for module_name in list(sys.modules):
+        if module_name.startswith(
+            ("transformers.models.gemma", "transformers.models.paligemma", "transformers.models.siglip")
+        ):
+            del sys.modules[module_name]
+
+
+_ensure_transformers_patched()
+
+from openpi.models_pytorch.gemma_pytorch import PaliGemmaWithExpertModel  # noqa: E402
 
 
 def get_safe_dtype(target_dtype, device_type):
@@ -82,7 +113,7 @@ def make_att_2d_masks(pad_masks, att_masks):
 
 
 class PI0Pytorch(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, *, torch_compile: bool = False):
         super().__init__()
         self.config = config
         self.pi05 = config.pi05
@@ -97,32 +128,25 @@ class PI0Pytorch(nn.Module):
             precision=config.dtype,
         )
 
-        self.action_in_proj = nn.Linear(config.action_dim, action_expert_config.width)
-        self.action_out_proj = nn.Linear(action_expert_config.width, config.action_dim)
+        self.action_in_proj = nn.Linear(32, action_expert_config.width)
+        self.action_out_proj = nn.Linear(action_expert_config.width, 32)
 
         if self.pi05:
             self.time_mlp_in = nn.Linear(action_expert_config.width, action_expert_config.width)
             self.time_mlp_out = nn.Linear(action_expert_config.width, action_expert_config.width)
         else:
-            self.state_proj = nn.Linear(config.action_dim, action_expert_config.width)
+            self.state_proj = nn.Linear(32, action_expert_config.width)
             self.action_time_mlp_in = nn.Linear(2 * action_expert_config.width, action_expert_config.width)
             self.action_time_mlp_out = nn.Linear(action_expert_config.width, action_expert_config.width)
 
         torch.set_float32_matmul_precision("high")
-        if config.pytorch_compile_mode is not None:
-            self.sample_actions = torch.compile(self.sample_actions, mode=config.pytorch_compile_mode)
+        if torch_compile:
+            self.sample_actions = torch.compile(self.sample_actions, mode="max-autotune")
 
         # Initialize gradient checkpointing flag
         self.gradient_checkpointing_enabled = False
 
-        msg = "transformers_replace is not installed correctly. Please install it with `uv pip install transformers==4.53.2` and `cp -r ./src/openpi/models_pytorch/transformers_replace/* .venv/lib/python3.11/site-packages/transformers/`."
-        try:
-            from transformers.models.siglip import check
-
-            if not check.check_whether_transformers_replace_is_installed_correctly():
-                raise ValueError(msg)
-        except ImportError:
-            raise ValueError(msg) from None
+        # Transformers patch is auto-applied at module import time.
 
     def gradient_checkpointing_enable(self):
         """Enable gradient checkpointing for memory optimization."""
