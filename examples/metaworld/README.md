@@ -8,11 +8,19 @@
 
 MetaWorld uses the root repo venv.
 
+## Example Rollout
+
+<a href="../../docs/assets/rollouts/metaworld_drawer_open_success.mp4">
+  <img src="../../docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer-open success rollout" width="420">
+</a>
+
+<sub><code>pi05_metaworld</code>, drawer-open-v3</sub>
+
 ## Setup
 
 ```bash
-git submodule update --init --recursive
-GIT_LFS_SKIP_SMUDGE=1 uv sync
+GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
+uv sync
 ```
 
 Use EGL for GPU rendering:

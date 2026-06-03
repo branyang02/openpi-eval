@@ -7,6 +7,14 @@ This example uses its own Python 3.11+ venv. The simulator runs here and talks t
 - `main.py`: one RoboCasa env.
 - `eval_all.py`: one subprocess per env in a task set.
 
+## Example Rollout
+
+<a href="../../docs/assets/rollouts/robocasa_slide_dishwasher_success.mp4">
+  <img src="../../docs/assets/rollouts/robocasa_slide_dishwasher_success.gif" alt="RoboCasa dishwasher rack success rollout" width="420">
+</a>
+
+<sub><code>pi05_robocasa</code>, SlideDishwasherRack</sub>
+
 ## Setup
 
 ```bash
