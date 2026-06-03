@@ -17,6 +17,7 @@ import openpi.models.model as _model
 import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
+import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.policies.metaworld_lerobot_policy as metaworld_lerobot_policy
 import openpi.policies.robocasa_policy as robocasa_policy
@@ -521,6 +522,51 @@ _CONFIGS = [
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+    ),
+    TrainConfig(
+        name="pi05_droid_jointpos",
+        model=pi0_config.Pi0Config(action_horizon=15, pi05=True),
+        data=SimpleDataConfig(
+            assets=AssetsConfig(asset_id="droid"),
+            data_transforms=lambda model: _transforms.Group(
+                inputs=[droid_policy.DroidInputs(model_type=ModelType.PI05)],
+                outputs=[
+                    _transforms.AbsoluteActions(_transforms.make_bool_mask(7, -1)),
+                    droid_policy.DroidOutputs(),
+                ],
+            ),
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+    ),
+    TrainConfig(
+        name="pi0_droid_jointpos",
+        model=pi0_config.Pi0Config(action_horizon=10),
+        data=SimpleDataConfig(
+            assets=AssetsConfig(asset_id="droid"),
+            data_transforms=lambda model: _transforms.Group(
+                inputs=[droid_policy.DroidInputs(model_type=ModelType.PI0)],
+                outputs=[
+                    _transforms.AbsoluteActions(_transforms.make_bool_mask(7, -1)),
+                    droid_policy.DroidOutputs(),
+                ],
+            ),
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+    ),
+    TrainConfig(
+        name="pi0_fast_droid_jointpos",
+        model=pi0_fast.Pi0FASTConfig(action_dim=8, action_horizon=10),
+        data=SimpleDataConfig(
+            assets=AssetsConfig(asset_id="droid"),
+            data_transforms=lambda model: _transforms.Group(
+                inputs=[droid_policy.DroidInputs(model_type=ModelType.PI0_FAST)],
+                outputs=[
+                    _transforms.AbsoluteActions(_transforms.make_bool_mask(7, -1)),
+                    droid_policy.DroidOutputs(),
+                ],
+            ),
+            base_config=DataConfig(prompt_from_task=True),
+        ),
     ),
     TrainConfig(
         name="debug",

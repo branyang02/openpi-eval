@@ -9,3 +9,7 @@
 	path = third_party/robocasa
 	url = https://github.com/robocasa/robocasa
 	ignore = untracked
+[submodule "third_party/robolab"]
+	path = third_party/robolab
+	url = https://github.com/NVLabs/RoboLab.git
+	ignore = untracked

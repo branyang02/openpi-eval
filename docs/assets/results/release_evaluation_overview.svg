@@ -1,19 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="470" viewBox="0 0 980 470" role="img" aria-labelledby="release-evaluation-overview-title release-evaluation-overview-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="498" viewBox="0 0 980 498" role="img" aria-labelledby="release-evaluation-overview-title release-evaluation-overview-desc">
 <title id="release-evaluation-overview-title">Release Evaluation Results</title>
-<desc id="release-evaluation-overview-desc">Mean success rates from current results.json outputs; released checkpoints only.</desc>
-<rect width="980" height="470" fill="#ffffff"/>
+<desc id="release-evaluation-overview-desc">Mean success rates from current release result outputs; released checkpoints only.</desc>
+<rect width="980" height="498" fill="#ffffff"/>
 <text x="24" y="34" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#111827">Release Evaluation Results</text>
-<text x="24" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6b7280">Mean success rates from current results.json outputs; released checkpoints only.</text>
-<line x1="310.0" y1="72" x2="310.0" y2="432" stroke="#e5e7eb" stroke-width="1"/>
-<text x="310.0" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">0</text>
-<line x1="453.5" y1="72" x2="453.5" y2="432" stroke="#e5e7eb" stroke-width="1"/>
-<text x="453.5" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">25</text>
-<line x1="597.0" y1="72" x2="597.0" y2="432" stroke="#e5e7eb" stroke-width="1"/>
-<text x="597.0" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">50</text>
-<line x1="740.5" y1="72" x2="740.5" y2="432" stroke="#e5e7eb" stroke-width="1"/>
-<text x="740.5" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">75</text>
-<line x1="884.0" y1="72" x2="884.0" y2="432" stroke="#e5e7eb" stroke-width="1"/>
-<text x="884.0" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">100</text>
+<text x="24" y="58" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6b7280">Mean success rates from current release result outputs; released checkpoints only.</text>
+<line x1="310.0" y1="72" x2="310.0" y2="460" stroke="#e5e7eb" stroke-width="1"/>
+<text x="310.0" y="480" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">0</text>
+<line x1="453.5" y1="72" x2="453.5" y2="460" stroke="#e5e7eb" stroke-width="1"/>
+<text x="453.5" y="480" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">25</text>
+<line x1="597.0" y1="72" x2="597.0" y2="460" stroke="#e5e7eb" stroke-width="1"/>
+<text x="597.0" y="480" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">50</text>
+<line x1="740.5" y1="72" x2="740.5" y2="460" stroke="#e5e7eb" stroke-width="1"/>
+<text x="740.5" y="480" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">75</text>
+<line x1="884.0" y1="72" x2="884.0" y2="460" stroke="#e5e7eb" stroke-width="1"/>
+<text x="884.0" y="480" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">100</text>
 <text x="294" y="105" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">MetaWorld pi05 ML45 train</text>
 <rect x="310" y="94" width="574" height="14" rx="2" fill="#f3f4f6"/>
 <rect x="310" y="94" width="523.8" height="14" rx="2" fill="#2563eb"/>
@@ -62,5 +62,9 @@
 <rect x="310" y="402" width="574" height="14" rx="2" fill="#f3f4f6"/>
 <rect x="310" y="402" width="5.0" height="14" rx="2" fill="#f97316"/>
 <text x="323.0" y="413" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">0.9%</text>
-<text x="597.0" y="466" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">success rate (%)</text>
+<text x="294" y="441" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">RoboLab pi05 BananaInBowl</text>
+<rect x="310" y="430" width="574" height="14" rx="2" fill="#f3f4f6"/>
+<rect x="310" y="430" width="459.2" height="14" rx="2" fill="#0891b2"/>
+<text x="777.2" y="441" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#111827">80.0%</text>
+<text x="597.0" y="494" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#6b7280">success rate (%)</text>
 </svg>

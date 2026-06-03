@@ -1,7 +1,7 @@
 # openpi-eval
 
 Focused OpenPI evaluation repo for pretrained `pi05` policies in MetaWorld,
-LIBERO, and RoboCasa, plus released `pi0_fast` support where noted.
+LIBERO, RoboCasa, and RoboLab, plus released `pi0_fast` support where noted.
 
 JAX is the default backend for training, serving, and evaluation. PyTorch serving
 is available for `pi05` checkpoints through JAX-to-PyTorch conversion.
@@ -40,7 +40,7 @@ Click a preview to open the full MP4.
 
 ## Evaluation Results
 
-Current release success rates from `results.json` outputs are summarized below.
+Current release success rates from result outputs are summarized below.
 Detailed charts live in the simulator READMEs.
 
 <img src="docs/assets/results/release_evaluation_overview.svg" alt="Release evaluation success rate overview" width="900">
@@ -52,6 +52,7 @@ Detailed charts live in the simulator READMEs.
 | MetaWorld | `pi05_metaworld` checkpoint | Training example only | JAX eval; optional `pi05` PyTorch serving | [MetaWorld](examples/metaworld/README.md) |
 | LIBERO | `pi05_libero` checkpoint | `pi0_fast_libero` checkpoint | JAX eval; optional `pi05` PyTorch serving | [LIBERO](examples/libero_env/README.md) |
 | RoboCasa | `pi05_robocasa` checkpoint | config only | JAX eval; `pi0_fast` checkpoint not included in this release | [RoboCasa](examples/robocasa_env/README.md) |
+| RoboLab | `pi05_droid_jointpos` checkpoint | `pi0_fast_droid_jointpos` checkpoint | JAX eval through latest RoboLab Pi0-family runner | [RoboLab](examples/robolab_env/README.md) |
 
 Checkpoint download commands, training examples, evaluation commands, and
 environment-specific troubleshooting live in the linked guides.
@@ -59,8 +60,8 @@ environment-specific troubleshooting live in the linked guides.
 ## Setup
 
 ```bash
-git submodule update --init --recursive
-GIT_LFS_SKIP_SMUDGE=1 uv sync
+GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
+uv sync
 ```
 
 Simulator clients use environment-specific dependencies:
@@ -68,6 +69,7 @@ Simulator clients use environment-specific dependencies:
 - [MetaWorld](examples/metaworld/README.md): root repo environment.
 - [LIBERO](examples/libero_env/README.md): separate Python 3.8 simulator environment.
 - [RoboCasa](examples/robocasa_env/README.md): separate Python 3.11+ simulator environment with kitchen assets.
+- [RoboLab](examples/robolab_env/README.md): separate Python 3.11 simulator environment with Isaac Sim 5.0.
 
 Use EGL on GPU machines:
 

@@ -68,6 +68,9 @@ def test_training_matrix_data_configs():
         "pi0_fast_libero",
         "pi05_robocasa",
         "pi0_fast_robocasa",
+        "pi05_droid_jointpos",
+        "pi0_droid_jointpos",
+        "pi0_fast_droid_jointpos",
     ]
 
     for config_name in config_names:

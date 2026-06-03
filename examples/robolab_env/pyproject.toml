@@ -1,0 +1,48 @@
+[project]
+name = "robolab-env"
+version = "0.1.0"
+description = "RoboLab evaluation client for OpenPI policies"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "openpi-client",
+    "robolab",
+]
+
+[tool.uv]
+prerelease = "allow"
+index-strategy = "unsafe-best-match"
+constraint-dependencies = ["warp-lang != 1.13.0.dev20260418"]
+
+[tool.uv.extra-build-dependencies]
+flatdict = ["setuptools<81", "wheel"]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
+
+[tool.uv.sources]
+openpi-client = { path = "../../packages/openpi-client", editable = true }
+robolab = { path = "../../third_party/robolab", editable = true }
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "ruff>=0.15.9",
+]
+
+[tool.ruff.lint]
+select = ["I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "manual: requires Isaac Sim 5.0, RoboLab assets, and an NVIDIA GPU",
+]
