@@ -47,7 +47,7 @@ Click a preview to open the full MP4.
 
 ## Evaluation Results
 
-Current release success rates from result outputs are summarized below.
+Current release success rates from `results.json` outputs are summarized below.
 Detailed charts live in the simulator READMEs.
 
 <img src="docs/assets/results/release_evaluation_overview.svg" alt="Release evaluation success rate overview" width="900">

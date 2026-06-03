@@ -80,13 +80,7 @@ The default connection is `localhost:8000`; pass `--remote-host`, `--remote-port
 
 ## Results
 
-Fresh `pi05_droid_jointpos` validation run:
-
-<img src="../../docs/assets/results/robolab_banana_in_bowl_pi05.svg" alt="RoboLab pi05 BananaInBowlTask success rate" width="900">
-
-| Policy | Task | Episodes | Successes | Success rate |
-|---|---|---:|---:|---:|
-| `pi05_droid_jointpos` | `BananaInBowlTask` | 10 | 8 | 80.0% |
+No RoboLab release evaluation results are included in this release. Full evaluation requires Isaac Sim, RoboLab assets, and sustained NVIDIA GPU time.
 
 Generated results live under `third_party/robolab/output/` and should be published only after a fresh release evaluation. RoboLab's dashboard can inspect those runs:
 
