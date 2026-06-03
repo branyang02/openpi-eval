@@ -9,11 +9,11 @@ This example uses the latest RoboLab submodule and its Pi0-family runner. The si
 
 ## Example Rollout
 
-<a href="../../docs/assets/rollouts/robolab_banana_in_bowl_success.mp4">
-  <img src="../../docs/assets/rollouts/robolab_banana_in_bowl_success.gif" alt="RoboLab BananaInBowlTask success rollout" width="420">
+<a href="../../docs/assets/rollouts/robolab_bananas_in_bin_three_total_success.mp4">
+  <img src="../../docs/assets/rollouts/robolab_bananas_in_bin_three_total_success.gif" alt="RoboLab BananasInBinThreeTotalTask success rollout" width="420">
 </a>
 
-<sub><code>pi05_droid_jointpos</code>, BananaInBowlTask</sub>
+<sub><code>pi05_droid_jointpos</code>, BananasInBinThreeTotalTask</sub>
 
 ## Setup
 
