@@ -8,6 +8,8 @@ from openpi.models import pi0_fast
 from openpi.shared import download
 from openpi.shared import nnx_utils
 
+pytestmark = pytest.mark.slow
+
 
 def test_pi0_model():
     key = jax.random.key(0)

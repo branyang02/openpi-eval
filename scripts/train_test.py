@@ -10,6 +10,8 @@ from openpi.training import config as _config
 
 from . import train
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.mark.parametrize("config_name", ["debug"])
 def test_train(tmp_path: pathlib.Path, config_name: str):
