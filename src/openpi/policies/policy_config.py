@@ -22,6 +22,8 @@ def create_trained_policy(
     default_prompt: str | None = None,
     norm_stats: dict[str, transforms.NormStats] | None = None,
     pytorch_device: str | None = None,
+    torch_compile: bool = False,
+    use_pytorch: bool | None = None,
 ) -> _policy.Policy:
     """Create a policy from a trained checkpoint.
 
@@ -37,6 +39,9 @@ def create_trained_policy(
             from the checkpoint directory.
         pytorch_device: Device to use for PyTorch models (e.g., "cpu", "cuda", "cuda:0").
                       If None and is_pytorch=True, will use "cuda" if available, otherwise "cpu".
+        torch_compile: If True, wrap PyTorch sampling with torch.compile.
+        use_pytorch: If set, force PyTorch or JAX backend selection instead of auto-detecting from
+            model.safetensors.
 
     Note:
         The function automatically detects whether the model is PyTorch-based by checking for the
@@ -45,13 +50,22 @@ def create_trained_policy(
     repack_transforms = repack_transforms or transforms.Group()
     checkpoint_dir = download.maybe_download(str(checkpoint_dir))
 
-    # Check if this is a PyTorch model by looking for model.safetensors
+    # Check if this is a PyTorch model by looking for model.safetensors, unless
+    # the caller explicitly requests a backend.
     weight_path = os.path.join(checkpoint_dir, "model.safetensors")
-    is_pytorch = os.path.exists(weight_path)
+    if use_pytorch is None:
+        is_pytorch = os.path.exists(weight_path)
+    else:
+        is_pytorch = use_pytorch
+        if is_pytorch and not os.path.exists(weight_path):
+            raise FileNotFoundError(
+                f"use_pytorch=True but model.safetensors not found at {weight_path}. "
+                "Run ensure_pytorch_checkpoint() first, or drop the flag."
+            )
 
     logging.info("Loading model...")
     if is_pytorch:
-        model = train_config.model.load_pytorch(train_config, weight_path)
+        model = train_config.model.load_pytorch(train_config, weight_path, torch_compile=torch_compile)
         model.paligemma_with_expert.to_bfloat16_for_selected_params("bfloat16")
     else:
         model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16))
@@ -74,6 +88,7 @@ def create_trained_policy(
 
     return _policy.Policy(
         model,
+        model_type=train_config.model.model_type,
         transforms=[
             *repack_transforms.inputs,
             transforms.InjectDefaultPrompt(default_prompt),

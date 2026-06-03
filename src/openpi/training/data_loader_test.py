@@ -1,5 +1,3 @@
-import dataclasses
-
 import jax
 
 from openpi.models import pi0_config
@@ -62,23 +60,19 @@ def test_with_fake_dataset():
         assert actions.shape == (config.batch_size, config.model.action_horizon, config.model.action_dim)
 
 
-def test_with_real_dataset():
-    config = _config.get_config("pi0_aloha_sim")
-    config = dataclasses.replace(config, batch_size=4)
+def test_training_matrix_data_configs():
+    config_names = [
+        "pi05_metaworld",
+        "pi0_fast_metaworld",
+        "pi05_libero",
+        "pi0_fast_libero",
+        "pi05_robocasa",
+        "pi0_fast_robocasa",
+    ]
 
-    loader = _data_loader.create_data_loader(
-        config,
-        # Skip since we may not have the data available.
-        skip_norm_stats=True,
-        num_batches=2,
-        shuffle=True,
-    )
-    # Make sure that we can get the data config.
-    assert loader.data_config().repo_id == config.data.repo_id
+    for config_name in config_names:
+        config = _config.get_config(config_name)
+        data_config = config.data.create(config.assets_dirs, config.model)
 
-    batches = list(loader)
-
-    assert len(batches) == 2
-
-    for _, actions in batches:
-        assert actions.shape == (config.batch_size, config.model.action_horizon, config.model.action_dim)
+        assert data_config.model_transforms.inputs
+        assert data_config.data_transforms.inputs

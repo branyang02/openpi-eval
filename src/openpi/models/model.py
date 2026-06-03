@@ -240,9 +240,9 @@ class BaseModelConfig(abc.ABC):
         state.replace_by_pure_dict(params)
         return nnx.merge(graphdef, state)
 
-    def load_pytorch(self, train_config, weight_path: str):
+    def load_pytorch(self, train_config, weight_path: str, *, torch_compile: bool = False):
         logger.info(f"train_config: {train_config}")
-        model = pi0_pytorch.PI0Pytorch(config=train_config.model)
+        model = pi0_pytorch.PI0Pytorch(config=train_config.model, torch_compile=torch_compile)
         safetensors.torch.load_model(model, weight_path)
         return model
 

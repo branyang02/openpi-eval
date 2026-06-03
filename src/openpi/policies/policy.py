@@ -1,11 +1,7 @@
 from collections.abc import Sequence
-import logging
-import pathlib
 import time
 from typing import Any, TypeAlias
 
-import flax
-import flax.traverse_util
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -21,11 +17,30 @@ from openpi.shared import nnx_utils
 BasePolicy: TypeAlias = _base_policy.BasePolicy
 
 
+def collate_transformed_singles(singles: list[dict]) -> dict:
+    """Stack single-example transformed inputs back into one model batch."""
+    out = {}
+    flat_keys = ["state", "tokenized_prompt", "tokenized_prompt_mask"]
+    flat_keys.extend(k for k in ["token_ar_mask", "token_loss_mask"] if k in singles[0])
+
+    for key in flat_keys:
+        out[key] = jnp.stack([jnp.asarray(example[key]) for example in singles], axis=0)
+
+    for key in ["image", "image_mask"]:
+        out[key] = {
+            image_key: jnp.stack([jnp.asarray(example[key][image_key]) for example in singles], axis=0)
+            for image_key in singles[0][key]
+        }
+
+    return out
+
+
 class Policy(BasePolicy):
     def __init__(
         self,
         model: _model.BaseModel,
         *,
+        model_type: _model.ModelType,
         rng: at.KeyArrayLike | None = None,
         transforms: Sequence[_transforms.DataTransformFn] = (),
         output_transforms: Sequence[_transforms.DataTransformFn] = (),
@@ -38,6 +53,7 @@ class Policy(BasePolicy):
 
         Args:
             model: The model to use for action sampling.
+            model_type: Which model architecture is being served.
             rng: Random number generator key for JAX models. Ignored for PyTorch models.
             transforms: Input data transformations to apply before inference.
             output_transforms: Output data transformations to apply after inference.
@@ -48,6 +64,7 @@ class Policy(BasePolicy):
             is_pytorch: Whether the model is a PyTorch model. If False, assumes JAX model.
         """
         self._model = model
+        self._model_type = model_type
         self._input_transform = _transforms.compose(transforms)
         self._output_transform = _transforms.compose(output_transforms)
         self._sample_kwargs = sample_kwargs or {}
@@ -64,8 +81,66 @@ class Policy(BasePolicy):
             self._sample_actions = nnx_utils.module_jit(model.sample_actions)
             self._rng = rng or jax.random.key(0)
 
+    def infer_batched(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:
+        # Make a copy since transformations may modify the inputs in place.
+        inputs = jax.tree.map(lambda x: x, obs)
+
+        eval_batch_size = int(inputs["observation/state"].shape[0])
+        singles = [{key: value[i] for key, value in inputs.items()} for i in range(eval_batch_size)]
+        singles = [self._input_transform(example) for example in singles]
+        inputs = collate_transformed_singles(singles)
+
+        if self._is_pytorch_model:
+            inputs = jax.tree.map(lambda x: torch.from_numpy(np.array(x)).to(self._pytorch_device), inputs)
+            sample_rng_or_pytorch_device = self._pytorch_device
+        else:
+            inputs = jax.tree.map(lambda x: jnp.asarray(x), inputs)
+            self._rng, sample_rng_or_pytorch_device = jax.random.split(self._rng)
+
+        sample_kwargs = dict(self._sample_kwargs)
+        if noise is not None:
+            noise = torch.from_numpy(noise).to(self._pytorch_device) if self._is_pytorch_model else jnp.asarray(noise)
+            if noise.ndim == 2:
+                noise = noise[None, ...]
+            sample_kwargs["noise"] = noise
+
+        observation = _model.Observation.from_dict(inputs)
+        start_time = time.monotonic()
+        outputs = {
+            "state": inputs["state"],
+            "actions": self._sample_actions(sample_rng_or_pytorch_device, observation, **sample_kwargs),
+        }
+        model_time = time.monotonic() - start_time
+
+        if self._is_pytorch_model:
+            outputs = jax.tree.map(
+                lambda x: np.asarray(x.detach().cpu()) if isinstance(x, torch.Tensor) else np.asarray(x),
+                outputs,
+            )
+        else:
+            outputs = jax.tree.map(lambda x: np.asarray(x), outputs)
+
+        if self._model_type == _model.ModelType.PI0_FAST:
+            per_sample_outputs = [
+                self._output_transform({"state": outputs["state"][i], "actions": outputs["actions"][i]})
+                for i in range(eval_batch_size)
+            ]
+            outputs = {
+                key: np.stack([item[key] for item in per_sample_outputs], axis=0) for key in per_sample_outputs[0]
+            }
+        else:
+            outputs = self._output_transform(outputs)
+
+        outputs["policy_timing"] = {
+            "infer_ms": model_time * 1000,
+        }
+        return outputs
+
     @override
     def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:  # type: ignore[misc]
+        if "observation/state" in obs and obs["observation/state"].ndim == 2:
+            return self.infer_batched(obs, noise=noise)
+
         # Make a copy since transformations may modify the inputs in place.
         inputs = jax.tree.map(lambda x: x, obs)
         inputs = self._input_transform(inputs)
@@ -108,28 +183,3 @@ class Policy(BasePolicy):
     @property
     def metadata(self) -> dict[str, Any]:
         return self._metadata
-
-
-class PolicyRecorder(_base_policy.BasePolicy):
-    """Records the policy's behavior to disk."""
-
-    def __init__(self, policy: _base_policy.BasePolicy, record_dir: str):
-        self._policy = policy
-
-        logging.info(f"Dumping policy records to: {record_dir}")
-        self._record_dir = pathlib.Path(record_dir)
-        self._record_dir.mkdir(parents=True, exist_ok=True)
-        self._record_step = 0
-
-    @override
-    def infer(self, obs: dict) -> dict:  # type: ignore[misc]
-        results = self._policy.infer(obs)
-
-        data = {"inputs": obs, "outputs": results}
-        data = flax.traverse_util.flatten_dict(data, sep="/")
-
-        output_path = self._record_dir / f"step_{self._record_step}"
-        self._record_step += 1
-
-        np.save(output_path, np.asarray(data))
-        return results

@@ -3,29 +3,101 @@ on:
   pull_request:
     branches:
       - "*"
+  workflow_dispatch:
 
+# Split root, libero_env, and robocasa_env into separate jobs so their
+# dependency sets do not compete for the same runner disk space.
 jobs:
-  run_tests:
-    name: Run Tests
-    runs-on: openpi-verylarge
+  test-main:
+    name: Tests (main, CPU)
+    runs-on: ubuntu-24.04
     env:
       GIT_LFS_SKIP_SMUDGE: true
+      JAX_PLATFORMS: cpu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Install FFmpeg dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        run: uv python install
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.5.14"
+          enable-cache: true
 
       - name: Install the project
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
-      - name: Run tests
+      - name: Run main openpi tests
         run: uv run pytest --strict-markers -m "not manual"
+
+  test-libero:
+    name: Tests (libero_env, CPU)
+    runs-on: ubuntu-24.04
+    env:
+      GIT_LFS_SKIP_SMUDGE: true
+      JAX_PLATFORMS: cpu
+      MUJOCO_GL: osmesa
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libosmesa6
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.5.14"
+          enable-cache: true
+
+      - name: Sync libero_env venv
+        working-directory: examples/libero_env
+        run: uv sync
+
+      - name: Run libero_env tests
+        working-directory: examples/libero_env
+        run: uv run pytest -v
+
+  test-robocasa:
+    name: Tests (robocasa_env, CPU)
+    runs-on: ubuntu-24.04
+    env:
+      GIT_LFS_SKIP_SMUDGE: true
+      JAX_PLATFORMS: cpu
+      MUJOCO_GL: osmesa
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libosmesa6
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.5.14"
+          enable-cache: true
+
+      - name: Sync robocasa_env venv
+        working-directory: examples/robocasa_env
+        run: uv sync
+
+      - name: Run robocasa_env tests
+        working-directory: examples/robocasa_env
+        run: uv run pytest --strict-markers -m "not manual" -v

@@ -1,7 +1,11 @@
 # Data directories.
 assets/
+!docs/assets/
+!docs/assets/**
 checkpoints/
 data/
+eval_logs/
+examples/*/output/
 wandb/
 
 # Byte-compiled / optimized / DLL files

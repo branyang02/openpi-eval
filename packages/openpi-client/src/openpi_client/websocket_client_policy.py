@@ -34,12 +34,24 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
         while True:
             try:
                 headers = {"Authorization": f"Api-Key {self._api_key}"} if self._api_key else None
-                conn = websockets.sync.client.connect(
-                    self._uri, compression=None, max_size=None, additional_headers=headers
-                )
+                connect_kwargs = {
+                    "compression": None,
+                    "max_size": None,
+                    "additional_headers": headers,
+                }
+                try:
+                    conn = websockets.sync.client.connect(
+                        self._uri,
+                        ping_timeout=600,
+                        **connect_kwargs,
+                    )
+                except TypeError as exc:
+                    if "ping_timeout" not in str(exc):
+                        raise
+                    conn = websockets.sync.client.connect(self._uri, **connect_kwargs)
                 metadata = msgpack_numpy.unpackb(conn.recv())
                 return conn, metadata
-            except ConnectionRefusedError:
+            except (ConnectionRefusedError, TimeoutError):
                 logging.info("Still waiting for server...")
                 time.sleep(5)
 
