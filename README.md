@@ -18,10 +18,10 @@ Click a preview to open the full MP4.
   </tr>
   <tr>
     <td>
-      <a href="docs/assets/rollouts/metaworld_reach_success.mp4">
-        <img src="docs/assets/rollouts/metaworld_reach_success.gif" alt="MetaWorld reach rollout preview" width="260">
+      <a href="docs/assets/rollouts/metaworld_drawer_open_success.mp4">
+        <img src="docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer open rollout preview" width="260">
       </a>
-      <br><sub><code>pi05_metaworld</code>, reach-v3</sub>
+      <br><sub><code>pi05_metaworld</code>, drawer-open-v3</sub>
     </td>
     <td>
       <a href="docs/assets/rollouts/libero_bbq_sauce_success.mp4">
@@ -30,10 +30,10 @@ Click a preview to open the full MP4.
       <br><sub><code>pi05_libero</code>, BBQ sauce to basket</sub>
     </td>
     <td>
-      <a href="docs/assets/rollouts/robocasa_turn_on_sink_success.mp4">
-        <img src="docs/assets/rollouts/robocasa_turn_on_sink_success.gif" alt="RoboCasa sink faucet rollout preview" width="260">
+      <a href="docs/assets/rollouts/robocasa_slide_dishwasher_success.mp4">
+        <img src="docs/assets/rollouts/robocasa_slide_dishwasher_success.gif" alt="RoboCasa dishwasher rack rollout preview" width="260">
       </a>
-      <br><sub><code>pi05_robocasa</code>, TurnOnSinkFaucet</sub>
+      <br><sub><code>pi05_robocasa</code>, SlideDishwasherRack</sub>
     </td>
   </tr>
 </table>
