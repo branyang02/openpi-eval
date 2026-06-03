@@ -37,10 +37,10 @@ Click a preview to open the full MP4.
       <br><sub><code>pi05_robocasa</code>, SlideDishwasherRack</sub>
     </td>
     <td>
-      <a href="docs/assets/rollouts/robolab_bananas_in_bin_three_total_success.mp4">
-        <img src="docs/assets/rollouts/robolab_bananas_in_bin_three_total_success.gif" alt="RoboLab bananas in bin rollout preview" width="220">
+      <a href="docs/assets/rollouts/robolab_one_bottle_square_pail_success.mp4">
+        <img src="docs/assets/rollouts/robolab_one_bottle_square_pail_success.gif" alt="RoboLab bottle in square pail rollout preview" width="220">
       </a>
-      <br><sub><code>pi05_droid_jointpos</code>, BananasInBinThreeTotalTask</sub>
+      <br><sub><code>pi05_droid_jointpos</code>, OneBottleInSquarePailTask</sub>
     </td>
   </tr>
 </table>
