@@ -15,25 +15,32 @@ Click a preview to open the full MP4.
     <th>MetaWorld</th>
     <th>LIBERO</th>
     <th>RoboCasa</th>
+    <th>RoboLab</th>
   </tr>
   <tr>
     <td>
       <a href="docs/assets/rollouts/metaworld_drawer_open_success.mp4">
-        <img src="docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer open rollout preview" width="260">
+        <img src="docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer open rollout preview" width="220">
       </a>
       <br><sub><code>pi05_metaworld</code>, drawer-open-v3</sub>
     </td>
     <td>
       <a href="docs/assets/rollouts/libero_bbq_sauce_success.mp4">
-        <img src="docs/assets/rollouts/libero_bbq_sauce_success.gif" alt="LIBERO BBQ sauce rollout preview" width="260">
+        <img src="docs/assets/rollouts/libero_bbq_sauce_success.gif" alt="LIBERO BBQ sauce rollout preview" width="220">
       </a>
       <br><sub><code>pi05_libero</code>, BBQ sauce to basket</sub>
     </td>
     <td>
       <a href="docs/assets/rollouts/robocasa_slide_dishwasher_success.mp4">
-        <img src="docs/assets/rollouts/robocasa_slide_dishwasher_success.gif" alt="RoboCasa dishwasher rack rollout preview" width="260">
+        <img src="docs/assets/rollouts/robocasa_slide_dishwasher_success.gif" alt="RoboCasa dishwasher rack rollout preview" width="220">
       </a>
       <br><sub><code>pi05_robocasa</code>, SlideDishwasherRack</sub>
+    </td>
+    <td>
+      <a href="docs/assets/rollouts/robolab_banana_in_bowl_success.mp4">
+        <img src="docs/assets/rollouts/robolab_banana_in_bowl_success.gif" alt="RoboLab banana in bowl rollout preview" width="220">
+      </a>
+      <br><sub><code>pi05_droid_jointpos</code>, BananaInBowlTask</sub>
     </td>
   </tr>
 </table>

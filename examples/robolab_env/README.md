@@ -7,6 +7,14 @@ This example uses the latest RoboLab submodule and its Pi0-family runner. The si
 - `main.py`: thin wrapper around `third_party/robolab/policies/pi0_family/run.py`.
 - Output: `third_party/robolab/output/<timestamp>_<policy>/`.
 
+## Example Rollout
+
+<a href="../../docs/assets/rollouts/robolab_banana_in_bowl_success.mp4">
+  <img src="../../docs/assets/rollouts/robolab_banana_in_bowl_success.gif" alt="RoboLab BananaInBowlTask success rollout" width="420">
+</a>
+
+<sub><code>pi05_droid_jointpos</code>, BananaInBowlTask</sub>
+
 ## Setup
 
 ```bash

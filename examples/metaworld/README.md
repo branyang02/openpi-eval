@@ -8,6 +8,14 @@
 
 MetaWorld uses the root repo venv.
 
+## Example Rollout
+
+<a href="../../docs/assets/rollouts/metaworld_drawer_open_success.mp4">
+  <img src="../../docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer-open success rollout" width="420">
+</a>
+
+<sub><code>pi05_metaworld</code>, drawer-open-v3</sub>
+
 ## Setup
 
 ```bash

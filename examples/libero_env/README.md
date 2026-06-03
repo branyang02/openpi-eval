@@ -7,6 +7,14 @@ This example uses its own Python 3.8 venv. The simulator runs here and talks to 
 - `main.py`: one suite task, selected by `--task_suite_name` and `--task_id`.
 - `eval_all.py`: one subprocess per task in a suite.
 
+## Example Rollout
+
+<a href="../../docs/assets/rollouts/libero_bbq_sauce_success.mp4">
+  <img src="../../docs/assets/rollouts/libero_bbq_sauce_success.gif" alt="LIBERO BBQ sauce success rollout" width="420">
+</a>
+
+<sub><code>pi05_libero</code>, BBQ sauce to basket</sub>
+
 ## Setup
 
 ```bash
