@@ -108,6 +108,16 @@ examples/robocasa_env/output/<task_set>-<split>/
 Generated results are written to `examples/robocasa_env/output/` and should be
 published only after a fresh release evaluation.
 
+## Results
+
+Current release task-set evaluations from aggregate `results.json` files.
+
+<img src="../../docs/assets/results/robocasa_task_set_success.svg" alt="RoboCasa task-set success rates" width="900">
+
+Atomic-seen per-task success rates:
+
+<img src="../../docs/assets/results/robocasa_atomic_seen_tasks.svg" alt="RoboCasa atomic-seen per-task success rates" width="900">
+
 ## Tests
 
 ```bash

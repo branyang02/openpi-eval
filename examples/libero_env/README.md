@@ -23,14 +23,22 @@ Use EGL for GPU rendering:
 export MUJOCO_GL=egl
 ```
 
-## Training Data
+## Training
 
 The configs use [`physical-intelligence/libero`](https://huggingface.co/datasets/physical-intelligence/libero).
 
 ```bash
+# pi0.5 training
 uv run scripts/compute_norm_stats.py --config-name pi05_libero
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi05_libero \
     --exp-name pi05_libero_test \
+    --overwrite \
+    --num_train_steps 30000
+
+# pi0-FAST training
+uv run scripts/compute_norm_stats.py --config-name pi0_fast_libero
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_libero \
+    --exp-name pi0_fast_libero_train \
     --overwrite \
     --num_train_steps 30000
 ```
@@ -103,6 +111,12 @@ examples/libero_env/output/<task_suite_name>/
 
 Generated results are written to `examples/libero_env/output/` and should be
 published only after a fresh release evaluation.
+
+## Results
+
+Current release suite evaluations from `results.json`.
+
+<img src="../../docs/assets/results/libero_suite_success.svg" alt="LIBERO suite success rates" width="900">
 
 ## Tests
 
