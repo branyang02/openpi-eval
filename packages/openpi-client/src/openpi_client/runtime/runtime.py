@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from typing import List
 
 from openpi_client.runtime import agent as _agent
 from openpi_client.runtime import environment as _environment
@@ -14,7 +15,7 @@ class Runtime:
         self,
         environment: _environment.Environment,
         agent: _agent.Agent,
-        subscribers: list[_subscriber.Subscriber],
+        subscribers: List[_subscriber.Subscriber],
         max_hz: float = 0,
         num_episodes: int = 1,
         max_episode_steps: int = 0,
