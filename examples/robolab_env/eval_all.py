@@ -137,7 +137,9 @@ def _resolve_tasks(args: Args, repo_root: Path = _REPO_ROOT) -> List[str]:
         return list(SUBSET)
     if args.task_set == "all":
         return _discover_benchmark_tasks(repo_root)
-    raise ValueError("Unknown task_set {!r}. Available: subset, all".format(args.task_set))
+    raise ValueError(
+        "Unknown task_set {!r}. Available: subset, all".format(args.task_set)
+    )
 
 
 def _run_label(args: Args) -> str:

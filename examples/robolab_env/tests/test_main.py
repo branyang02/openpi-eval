@@ -100,7 +100,9 @@ def test_build_runner_argv_requires_task_or_tag(tmp_path) -> None:
 
 def test_run_robolab_restores_sys_state(tmp_path, monkeypatch) -> None:
     repo_root = tmp_path
-    runner = repo_root / "third_party" / "robolab" / "policies" / "pi0_family" / "run.py"
+    runner = (
+        repo_root / "third_party" / "robolab" / "policies" / "pi0_family" / "run.py"
+    )
     runner.parent.mkdir(parents=True)
     runner.write_text("print('fake runner')\n")
 
