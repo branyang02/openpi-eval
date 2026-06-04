@@ -18,9 +18,12 @@ Like ``test_liberopro_env.py`` they run inside ``examples/liberopro_env/.venv``.
 
 from __future__ import annotations
 
+import json
 import math
 import pathlib
+import sys
 import textwrap
+import types
 
 import eval_all
 
@@ -441,6 +444,95 @@ class TestResultSummaries:
         )
         assert summary["failed"] is False
         assert summary["success_rate"] == 0.0
+
+
+# --------------------------------------------------------- artifact contract
+
+
+class TestArtifactContract:
+    def test_eval_all_uses_libero_style_output_tree(
+        self, tmp_path: pathlib.Path, monkeypatch
+    ) -> None:
+        """Lock in the same top-level artifact shape as LIBERO eval_all:
+        results.json, parallel_logs/task_NN.log, and per-task episode videos.
+
+        The fake subprocess runner simulates what main.py writes so this stays
+        pure Python while still checking eval_all forwards the same output_dir
+        to each task process.
+        """
+
+        class FakeTask:
+            def __init__(self, task_id: int) -> None:
+                self.name = f"fake_task_{task_id:02d}"
+                self.language = f"do fake task {task_id}"
+
+        class FakeSuite:
+            n_tasks = 2
+
+            def get_task(self, task_id: int) -> FakeTask:
+                return FakeTask(task_id)
+
+        fake_main = types.ModuleType("main")
+        fake_main.get_task_suite = lambda _suite_name: FakeSuite()
+        monkeypatch.setitem(sys.modules, "main", fake_main)
+
+        forwarded_output_dirs: list[str] = []
+
+        def fake_run_one_task(
+            args: eval_all.Args,
+            task_id: int,
+            log_dir: str,
+            cwd: str,
+            output_dir: str,
+        ) -> dict[str, object]:
+            del args, cwd
+            forwarded_output_dirs.append(output_dir)
+
+            log_path = pathlib.Path(log_dir) / f"task_{task_id:02d}.log"
+            log_path.write_text(f"success_rate={1.0 - task_id:.2f}\n")
+
+            task_dir = (
+                pathlib.Path(output_dir) / f"{task_id:02d}-fake-task-{task_id:02d}"
+            )
+            task_dir.mkdir(parents=True)
+            (task_dir / "episode_000.mp4").write_bytes(b"fake video")
+
+            return {
+                "task_id": task_id,
+                "success_rate": 1.0 - task_id,
+                "returncode": 0,
+                "log_path": str(log_path),
+            }
+
+        monkeypatch.setattr(eval_all, "_run_one_task", fake_run_one_task)
+
+        output_dir = tmp_path / "liberopro_run"
+        eval_all.main(
+            _default_args(
+                task_suite_name="libero_goal_task",
+                num_workers=1,
+                num_episodes=1,
+                output_dir=str(output_dir),
+            )
+        )
+
+        assert forwarded_output_dirs == [str(output_dir), str(output_dir)]
+        assert (output_dir / "parallel_logs" / "task_00.log").exists()
+        assert (output_dir / "parallel_logs" / "task_01.log").exists()
+        assert (
+            output_dir / "00-fake-task-00" / "episode_000.mp4"
+        ).read_bytes() == b"fake video"
+        assert (
+            output_dir / "01-fake-task-01" / "episode_000.mp4"
+        ).read_bytes() == b"fake video"
+
+        results = json.loads((output_dir / "results.json").read_text())
+        assert results["task_suite_name"] == "libero_goal_task"
+        assert results["mean_success_rate"] == 0.5
+        assert results["num_failed_tasks"] == 0
+        assert [task["task_id"] for task in results["per_task"]] == [0, 1]
+        assert all(task["failed"] is False for task in results["per_task"])
+        assert all("log_path" in task for task in results["per_task"])
 
 
 # --------------------------------------------------------- Args dataclass

@@ -93,7 +93,8 @@ class Args:
     seed: int = 7
 
     # Override the per-task output directory (for videos / artifacts). If None,
-    # defaults to ``output/{task_suite_name}-task{task_id:02d}``.
+    # defaults to ``output/{task_suite_name}-task{task_id:02d}``. Relative paths
+    # are resolved against the user's shell cwd, matching MetaWorld.
     output_dir: Optional[str] = None
 
 
@@ -408,7 +409,7 @@ def main(args: Args) -> None:
     logger.info("Server metadata: %s", policy.get_server_metadata())
 
     if args.output_dir is not None:
-        output_dir = args.output_dir
+        output_dir = os.path.abspath(args.output_dir)
     else:
         output_dir = os.path.join(
             os.path.dirname(__file__),

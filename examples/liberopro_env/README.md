@@ -145,6 +145,12 @@ examples/liberopro_env/output/<task_suite_name>/
 `-- <task_id>-<task_name>/episode_NNN.mp4
 ```
 
+This mirrors the LIBERO client: `main.py` writes per-episode MP4s under a
+task directory, while `eval_all.py` adds `results.json` and per-task subprocess
+logs. `results.json` includes `failed`, `returncode`, and `log_path` fields so
+infrastructure failures are visible instead of being mixed with policy
+failures.
+
 Generated results are written to `examples/liberopro_env/output/` and should be
 published only after a fresh release evaluation.
 
