@@ -42,14 +42,23 @@ class WebsocketPolicyServer:
         self._policy = policy
         self._host = host
         self._port = port
-        self._metadata = metadata or {}
         self._max_batch_size = max(1, int(max_batch_size))
         self._min_batch_size = min(self._max_batch_size, max(1, int(min_batch_size)))
         self._max_batch_wait_s = max(0.0, float(max_batch_wait_ms) / 1000)
         self._pad_to_batch_bucket = bool(pad_to_batch_bucket)
+        self._metadata = dict(metadata or {})
+        self._metadata["microbatch"] = {
+            "max_batch_size": self._max_batch_size,
+            "min_batch_size": self._min_batch_size,
+            "max_batch_wait_ms": self._max_batch_wait_s * 1000,
+            "pad_to_batch_bucket": self._pad_to_batch_bucket,
+        }
         self._request_queue: asyncio.Queue[_PendingRequest] | None = None
         self._ready_batch_queue: asyncio.Queue[list[_PendingRequest]] | None = None
         self._model_ready_event: asyncio.Event | None = None
+        self._batching_stopped = False
+        self._active_collection_batch: list[_PendingRequest] | None = None
+        self._active_inference_batch: list[_PendingRequest] | None = None
         logging.getLogger("websockets.server").setLevel(logging.INFO)
 
     def serve_forever(self) -> None:
@@ -91,39 +100,85 @@ class WebsocketPolicyServer:
             start_time = time.monotonic()
             action = self._policy.infer(obs)
             return action, {"infer_ms": (time.monotonic() - start_time) * 1000}
+        if self._batching_stopped:
+            raise self._batch_worker_stopped_error()
 
         loop = asyncio.get_running_loop()
         future = loop.create_future()
-        await self._request_queue.put(_PendingRequest(obs=obs, future=future, enqueued_time=time.monotonic()))
+        request = _PendingRequest(obs=obs, future=future, enqueued_time=time.monotonic())
+        await self._request_queue.put(request)
+        if self._batching_stopped and not future.done():
+            self._fail_request(request, self._batch_worker_stopped_error())
         return await future
 
     async def _batch_worker(self) -> None:
         assert self._request_queue is not None
         self._ready_batch_queue = asyncio.Queue()
         self._model_ready_event = asyncio.Event()
+        self._batching_stopped = False
 
         collector = asyncio.create_task(self._batch_collector_worker())
         inference_worker = asyncio.create_task(self._batch_inference_worker())
         try:
             await asyncio.gather(collector, inference_worker)
         finally:
+            self._batching_stopped = True
             for task in (collector, inference_worker):
                 task.cancel()
             for task in (collector, inference_worker):
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+            self._fail_pending_requests(self._batch_worker_stopped_error())
+
+    @staticmethod
+    def _batch_worker_stopped_error() -> RuntimeError:
+        return RuntimeError("Inference microbatch worker stopped before completing request.")
+
+    @staticmethod
+    def _fail_request(request: _PendingRequest, exc: BaseException) -> None:
+        if not request.future.done():
+            request.future.set_exception(exc)
+
+    def _fail_requests(self, requests: list[_PendingRequest], exc: BaseException) -> None:
+        for request in requests:
+            self._fail_request(request, exc)
+
+    def _fail_pending_requests(self, exc: BaseException) -> None:
+        if self._active_collection_batch is not None:
+            self._fail_requests(self._active_collection_batch, exc)
+        if self._active_inference_batch is not None:
+            self._fail_requests(self._active_inference_batch, exc)
+
+        if self._request_queue is not None:
+            while True:
+                try:
+                    self._fail_request(self._request_queue.get_nowait(), exc)
+                except asyncio.QueueEmpty:
+                    break
+
+        if self._ready_batch_queue is not None:
+            while True:
+                try:
+                    self._fail_requests(self._ready_batch_queue.get_nowait(), exc)
+                except asyncio.QueueEmpty:
+                    break
 
     async def _batch_collector_worker(self) -> None:
         assert self._ready_batch_queue is not None
         assert self._model_ready_event is not None
 
         while True:
-            batch = await self._collect_batch()
-            active_batch = [request for request in batch if not request.future.cancelled()]
-            if active_batch:
-                if self._model_ready_event.is_set():
-                    self._model_ready_event.clear()
-                await self._ready_batch_queue.put(active_batch)
+            batch = []
+            try:
+                batch = await self._collect_batch()
+                active_batch = [request for request in batch if not request.future.cancelled()]
+                if active_batch:
+                    if self._model_ready_event.is_set():
+                        self._model_ready_event.clear()
+                    await self._ready_batch_queue.put(active_batch)
+            except asyncio.CancelledError:
+                self._fail_requests(batch, self._batch_worker_stopped_error())
+                raise
 
     async def _batch_inference_worker(self) -> None:
         assert self._ready_batch_queue is not None
@@ -138,17 +193,24 @@ class WebsocketPolicyServer:
             if not active_batch:
                 continue
 
+            self._active_inference_batch = active_batch
             try:
                 start_time = time.monotonic()
                 outputs, infer_ms, padded_batch_size = await asyncio.to_thread(
                     self._run_policy_batch,
                     active_batch,
                 )
+            except asyncio.CancelledError:
+                self._fail_requests(active_batch, self._batch_worker_stopped_error())
+                raise
             except Exception as exc:
                 for request in active_batch:
                     if not request.future.cancelled():
                         request.future.set_exception(exc)
                 continue
+            finally:
+                if self._active_inference_batch is active_batch:
+                    self._active_inference_batch = None
 
             if len(outputs) != len(active_batch):
                 exc = RuntimeError(f"Policy returned {len(outputs)} outputs for {len(active_batch)} batched requests.")
@@ -172,52 +234,61 @@ class WebsocketPolicyServer:
         assert self._request_queue is not None
         assert self._model_ready_event is not None
 
-        first = await self._request_queue.get()
-        batch = [first]
-        deadline = time.monotonic() + self._max_batch_wait_s
+        batch: list[_PendingRequest] = []
+        self._active_collection_batch = batch
+        try:
+            first = await self._request_queue.get()
+            batch.append(first)
+            deadline = time.monotonic() + self._max_batch_wait_s
 
-        while len(batch) < self._max_batch_size:
             while len(batch) < self._max_batch_size:
-                try:
-                    batch.append(self._request_queue.get_nowait())
-                except asyncio.QueueEmpty:
+                while len(batch) < self._max_batch_size:
+                    try:
+                        batch.append(self._request_queue.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
+                if len(batch) >= self._max_batch_size:
                     break
 
-            if len(batch) >= self._max_batch_size:
-                break
+                if self._model_ready_event.is_set():
+                    if len(batch) >= self._min_batch_size:
+                        break
 
-            if self._model_ready_event.is_set():
-                if len(batch) >= self._min_batch_size:
+                    timeout = deadline - time.monotonic()
+                    if timeout <= 0:
+                        break
+                    try:
+                        batch.append(await asyncio.wait_for(self._request_queue.get(), timeout=timeout))
+                    except TimeoutError:
+                        break
+                    continue
+
+                get_request = asyncio.create_task(self._request_queue.get())
+                wait_for_model = asyncio.create_task(self._model_ready_event.wait())
+                done, pending = await asyncio.wait(
+                    {get_request, wait_for_model},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                for task in pending:
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+
+                if get_request in done:
+                    batch.append(get_request.result())
+                if wait_for_model in done:
+                    await self._fill_waiting_batch_after_model_ready(batch)
                     break
 
-                timeout = deadline - time.monotonic()
-                if timeout <= 0:
-                    break
-                try:
-                    batch.append(await asyncio.wait_for(self._request_queue.get(), timeout=timeout))
-                except TimeoutError:
-                    break
-                continue
-
-            get_request = asyncio.create_task(self._request_queue.get())
-            wait_for_model = asyncio.create_task(self._model_ready_event.wait())
-            done, pending = await asyncio.wait(
-                {get_request, wait_for_model},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for task in pending:
-                task.cancel()
-            for task in pending:
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-
-            if get_request in done:
-                batch.append(get_request.result())
-            if wait_for_model in done:
-                await self._fill_waiting_batch_after_model_ready(batch)
-                break
-
-        return batch
+            return batch
+        except asyncio.CancelledError:
+            self._fail_requests(batch, self._batch_worker_stopped_error())
+            raise
+        finally:
+            if self._active_collection_batch is batch:
+                self._active_collection_batch = None
 
     async def _fill_waiting_batch_after_model_ready(self, batch: list[_PendingRequest]) -> None:
         assert self._request_queue is not None

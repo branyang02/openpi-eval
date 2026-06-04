@@ -33,8 +33,8 @@ import time
 from typing import Dict, List, Literal, Optional, Pattern
 
 import numpy as np
-from openpi_client import websocket_client_policy
 import tyro
+from openpi_client import websocket_client_policy
 
 from main import get_task_suite
 
@@ -272,7 +272,9 @@ def _run_one_client(
         "success_rate": metrics.get(
             "success_rate", _last_float(SUCCESS_RATE_RE, log_text)
         ),
-        "policy_calls": metrics.get("policy_calls", _last_int(POLICY_CALLS_RE, log_text)),
+        "policy_calls": metrics.get(
+            "policy_calls", _last_int(POLICY_CALLS_RE, log_text)
+        ),
         "env_steps": metrics.get("env_steps", _last_int(ENV_STEPS_RE, log_text)),
         "server_batch_size_counts": metrics.get("server_batch_size_counts", {}),
         "server_padded_batch_size_counts": metrics.get(
@@ -310,7 +312,9 @@ def _summarize_results(
         if result["policy_calls"] is not None
     )
     total_env_steps = sum(
-        int(result["env_steps"]) for result in results if result["env_steps"] is not None
+        int(result["env_steps"])
+        for result in results
+        if result["env_steps"] is not None
     )
     returncode_counts = collections.Counter(
         str(result["returncode"]) for result in results
@@ -450,7 +454,9 @@ def main(args: Args) -> None:
             try:
                 result = future.result()
             except Exception as exc:  # noqa: BLE001
-                logger.exception("client_%03d crashed in worker: %s", spec.client_id, exc)
+                logger.exception(
+                    "client_%03d crashed in worker: %s", spec.client_id, exc
+                )
                 result = {
                     "client_id": spec.client_id,
                     "task_id": spec.task_id,

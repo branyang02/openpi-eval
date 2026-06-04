@@ -1,9 +1,13 @@
 import asyncio
+import concurrent.futures
 import contextlib
 import threading
 
 import numpy as np
 from openpi_client import base_policy
+from openpi_client import websocket_client_policy
+import pytest
+import websockets.asyncio.server as _server
 
 from openpi.serving import websocket_policy_server
 
@@ -94,6 +98,77 @@ def test_batch_worker_groups_concurrent_requests_and_preserves_order() -> None:
         assert [timing["padded_batch_size"] for _, timing in results] == [4, 4, 4, 4]
         assert all(timing["infer_ms"] >= 0 for _, timing in results)
         assert all(timing["queue_wait_ms"] >= 0 for _, timing in results)
+
+    asyncio.run(run())
+
+
+def test_websocket_microbatch_serving_preserves_client_result_mapping() -> None:
+    async def run() -> None:
+        policy = RecordingPolicy()
+        server = websocket_policy_server.WebsocketPolicyServer(
+            policy,
+            host="127.0.0.1",
+            max_batch_size=8,
+            min_batch_size=2,
+            max_batch_wait_ms=50,
+        )
+        server._request_queue = asyncio.Queue()  # noqa: SLF001
+        worker = asyncio.create_task(server._batch_worker())  # noqa: SLF001
+
+        try:
+            async with _server.serve(
+                server._handler,  # noqa: SLF001
+                "127.0.0.1",
+                0,
+                compression=None,
+                max_size=None,
+                ping_timeout=600,
+            ) as ws_server:
+                port = ws_server.sockets[0].getsockname()[1]
+                results, metadata = await asyncio.to_thread(_run_websocket_clients, port)
+        finally:
+            await _stop_worker(worker)
+
+        assert metadata["microbatch"]["max_batch_size"] == 8
+        assert len(results) == 32 * 4
+        for request_id, response_id, batch_size in results:
+            assert response_id == request_id
+            assert batch_size >= 1
+        assert policy.single_calls == []
+        assert any(len(batch) > 1 for batch in policy.batches)
+
+    def _run_websocket_clients(port: int) -> tuple[list[tuple[int, int, int]], dict]:
+        num_clients = 32
+        requests_per_client = 4
+        barrier = threading.Barrier(num_clients)
+        metadata = {}
+
+        def run_client(client_id: int) -> list[tuple[int, int, int]]:
+            client = websocket_client_policy.WebsocketClientPolicy("127.0.0.1", port)
+            try:
+                if client_id == 0:
+                    metadata.update(client.get_server_metadata())
+                barrier.wait(timeout=5)
+                client_results = []
+                for request_index in range(requests_per_client):
+                    request_id = client_id * 1000 + request_index
+                    response = client.infer({"id": request_id})
+                    server_timing = response["server_timing"]
+                    client_results.append(
+                        (
+                            request_id,
+                            int(response["actions"][0]),
+                            int(server_timing.get("batch_size", 1)),
+                        )
+                    )
+                return client_results
+            finally:
+                client._ws.close()  # noqa: SLF001
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_clients) as pool:
+            nested_results = list(pool.map(run_client, range(num_clients)))
+
+        return [item for result in nested_results for item in result], metadata
 
     asyncio.run(run())
 
@@ -260,5 +335,35 @@ def test_batch_collector_waits_for_min_batch_after_model_becomes_ready() -> None
 
         assert policy.batches == [[0, 1, 2, 3], [4, 5, 6, 7]]
         assert [int(output["actions"][0]) for output, _ in results] == [4, 5, 6, 7]
+
+    asyncio.run(run())
+
+
+def test_batch_worker_fails_waiting_requests_on_shutdown() -> None:
+    async def run() -> None:
+        policy = RecordingPolicy()
+        server = websocket_policy_server.WebsocketPolicyServer(
+            policy,
+            max_batch_size=4,
+            min_batch_size=4,
+            max_batch_wait_ms=1000,
+        )
+        server._request_queue = asyncio.Queue()  # noqa: SLF001
+        worker = asyncio.create_task(server._batch_worker())  # noqa: SLF001
+        request_task = asyncio.create_task(server._infer_action({"id": 99}))  # noqa: SLF001
+
+        await _wait_until(
+            lambda: server._active_collection_batch is not None  # noqa: SLF001
+            and len(server._active_collection_batch) == 1,  # noqa: SLF001
+        )
+
+        worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
+
+        with pytest.raises(RuntimeError, match="microbatch worker stopped"):
+            await request_task
+        with pytest.raises(RuntimeError, match="microbatch worker stopped"):
+            await server._infer_action({"id": 100})  # noqa: SLF001
 
     asyncio.run(run())
