@@ -33,15 +33,20 @@ class WebsocketPolicyServer:
         host: str = "0.0.0.0",
         port: int | None = None,
         metadata: dict | None = None,
+        *,
         max_batch_size: int = 1,
         max_batch_wait_ms: float = 0.0,
+        min_batch_size: int = 1,
+        pad_to_batch_bucket: bool = False,
     ) -> None:
         self._policy = policy
         self._host = host
         self._port = port
         self._metadata = metadata or {}
         self._max_batch_size = max(1, int(max_batch_size))
+        self._min_batch_size = min(self._max_batch_size, max(1, int(min_batch_size)))
         self._max_batch_wait_s = max(0.0, float(max_batch_wait_ms) / 1000)
+        self._pad_to_batch_bucket = bool(pad_to_batch_bucket)
         self._request_queue: asyncio.Queue[_PendingRequest] | None = None
         logging.getLogger("websockets.server").setLevel(logging.INFO)
 
@@ -54,9 +59,12 @@ class WebsocketPolicyServer:
             self._request_queue = asyncio.Queue()
             batch_worker = asyncio.create_task(self._batch_worker())
             logger.info(
-                "Enabled inference microbatching: max_batch_size=%d, max_batch_wait_ms=%.3f",
+                "Enabled inference microbatching: max_batch_size=%d, min_batch_size=%d, "
+                "max_batch_wait_ms=%.3f, pad_to_batch_bucket=%s",
                 self._max_batch_size,
+                self._min_batch_size,
                 self._max_batch_wait_s * 1000,
+                self._pad_to_batch_bucket,
             )
 
         async with _server.serve(
@@ -102,6 +110,9 @@ class WebsocketPolicyServer:
                 except asyncio.QueueEmpty:
                     pass
 
+                if len(batch) >= self._min_batch_size:
+                    break
+
                 timeout = deadline - time.monotonic()
                 if timeout <= 0:
                     break
@@ -116,11 +127,10 @@ class WebsocketPolicyServer:
 
             try:
                 start_time = time.monotonic()
-                if len(active_batch) == 1:
-                    outputs = [self._policy.infer(active_batch[0].obs)]
-                else:
-                    outputs = self._policy.infer_many([request.obs for request in active_batch])
-                infer_ms = (time.monotonic() - start_time) * 1000
+                outputs, infer_ms, padded_batch_size = await asyncio.to_thread(
+                    self._run_policy_batch,
+                    active_batch,
+                )
             except Exception as exc:
                 for request in active_batch:
                     if not request.future.cancelled():
@@ -140,9 +150,31 @@ class WebsocketPolicyServer:
                 timing = {
                     "infer_ms": infer_ms,
                     "batch_size": len(active_batch),
+                    "padded_batch_size": padded_batch_size,
                     "queue_wait_ms": (start_time - request.enqueued_time) * 1000,
                 }
                 request.future.set_result((output, timing))
+
+    def _run_policy_batch(self, batch: list[_PendingRequest]) -> tuple[list[dict], float, int]:
+        start_time = time.monotonic()
+        padded_batch_size = len(batch)
+        if len(batch) == 1:
+            outputs = [self._policy.infer(batch[0].obs)]
+        else:
+            batch_obs = [request.obs for request in batch]
+            padded_batch_size = self._padded_batch_size(len(batch_obs))
+            if padded_batch_size > len(batch_obs):
+                batch_obs.extend([batch_obs[-1]] * (padded_batch_size - len(batch_obs)))
+            outputs = self._policy.infer_many(batch_obs)[: len(batch)]
+        infer_ms = (time.monotonic() - start_time) * 1000
+        return outputs, infer_ms, padded_batch_size
+
+    def _padded_batch_size(self, batch_size: int) -> int:
+        if not self._pad_to_batch_bucket:
+            return batch_size
+        if batch_size <= 1:
+            return batch_size
+        return min(self._max_batch_size, 1 << (batch_size - 1).bit_length())
 
     async def _handler(self, websocket: _server.ServerConnection):
         logger.info(f"Connection from {websocket.remote_address} opened")

@@ -47,8 +47,14 @@ class Args:
     # Maximum number of concurrent WebSocket inference requests to combine into one model forward pass.
     max_batch_size: int = 1
 
+    # Dispatch a microbatch as soon as at least this many requests are queued.
+    min_batch_size: int = 1
+
     # Maximum time to wait for additional requests before running a partial batch.
     max_batch_wait_ms: float = 0.0
+
+    # Pad multi-request microbatches to the next power-of-two bucket to reduce JAX recompiles.
+    pad_to_batch_bucket: bool = False
 
     # Specifies how to load the policy. If not provided, the local pi05 LIBERO checkpoint will be used.
     policy: Checkpoint | Default = dataclasses.field(default_factory=Default)
@@ -87,7 +93,9 @@ def main(args: Args) -> None:
         port=args.port,
         metadata=policy_metadata,
         max_batch_size=args.max_batch_size,
+        min_batch_size=args.min_batch_size,
         max_batch_wait_ms=args.max_batch_wait_ms,
+        pad_to_batch_bucket=args.pad_to_batch_bucket,
     )
     server.serve_forever()
 

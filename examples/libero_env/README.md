@@ -99,10 +99,19 @@ For high-worker `eval_all.py` runs, enable server microbatching so concurrent
 client requests are grouped into larger JAX forwards:
 
 ```bash
-uv run scripts/serve_policy.py --max-batch-size 16 --max-batch-wait-ms 5 \
+uv run scripts/serve_policy.py \
+    --max-batch-size 16 --min-batch-size 4 --max-batch-wait-ms 5 \
+    --pad-to-batch-bucket \
     policy:checkpoint \
     --policy.config=pi05_libero \
     --policy.dir=checkpoints/openpi-libero-9000
+```
+
+Benchmark server throughput without launching the simulator:
+
+```bash
+uv run scripts/benchmark_policy_server_microbatch.py \
+    --payload libero --num-clients 64 --requests-per-client 10
 ```
 
 ## Evaluate
