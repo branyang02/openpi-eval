@@ -13,3 +13,7 @@
 	path = third_party/robolab
 	url = https://github.com/NVLabs/RoboLab.git
 	ignore = untracked
+[submodule "third_party/liberopro"]
+	path = third_party/liberopro
+	url = https://github.com/Zxy-MLlab/LIBERO-PRO.git
+	ignore = untracked
