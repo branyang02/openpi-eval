@@ -10,40 +10,51 @@ is available for `pi05` checkpoints through JAX-to-PyTorch conversion.
 
 Click a preview to open the full MP4.
 
+<div align="center">
+
 <table>
   <tr>
-    <td align="center">
+    <td align="center" valign="top" width="280">
       <strong>MetaWorld</strong><br>
       <a href="docs/assets/rollouts/metaworld_drawer_open_success.mp4">
-        <img src="docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer open rollout preview" width="220">
+        <img src="docs/assets/rollouts/metaworld_drawer_open_success.gif" alt="MetaWorld drawer open rollout preview" width="240">
       </a>
-      <br><sub><code>pi05_metaworld</code>, drawer-open-v3</sub>
+      <br><sub><code>pi05_metaworld</code></sub>
+      <br><sub>drawer-open-v3</sub>
     </td>
-    <td align="center">
+    <td align="center" valign="top" width="280">
       <strong>LIBERO</strong><br>
       <a href="docs/assets/rollouts/libero_bbq_sauce_success.mp4">
-        <img src="docs/assets/rollouts/libero_bbq_sauce_success.gif" alt="LIBERO BBQ sauce rollout preview" width="220">
+        <img src="docs/assets/rollouts/libero_bbq_sauce_success.gif" alt="LIBERO BBQ sauce rollout preview" width="240">
       </a>
-      <br><sub><code>pi05_libero</code>, BBQ sauce to basket</sub>
+      <br><sub><code>pi05_libero</code></sub>
+      <br><sub>BBQ sauce to basket</sub>
     </td>
-    <td align="center">
+    <td align="center" valign="top" width="280">
       <strong>RoboCasa</strong><br>
       <a href="docs/assets/rollouts/robocasa_slide_dishwasher_success.mp4">
-        <img src="docs/assets/rollouts/robocasa_slide_dishwasher_success.gif" alt="RoboCasa dishwasher rack rollout preview" width="220">
+        <img src="docs/assets/rollouts/robocasa_slide_dishwasher_success.gif" alt="RoboCasa dishwasher rack rollout preview" width="240">
       </a>
-      <br><sub><code>pi05_robocasa</code>, SlideDishwasherRack</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="3">
-      <strong>RoboLab</strong><br>
-      <a href="docs/assets/rollouts/robolab_one_bottle_square_pail_success.mp4">
-        <img src="docs/assets/rollouts/robolab_one_bottle_square_pail_success.gif" alt="RoboLab bottle in square pail rollout preview" width="220">
-      </a>
-      <br><sub><code>pi05_droid_jointpos</code>, OneBottleInSquarePailTask</sub>
+      <br><sub><code>pi05_robocasa</code></sub>
+      <br><sub>SlideDishwasherRack</sub>
     </td>
   </tr>
 </table>
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="280">
+      <strong>RoboLab</strong><br>
+      <a href="docs/assets/rollouts/robolab_one_bottle_square_pail_success.mp4">
+        <img src="docs/assets/rollouts/robolab_one_bottle_square_pail_success.gif" alt="RoboLab bottle in square pail rollout preview" width="240">
+      </a>
+      <br><sub><code>pi05_droid_jointpos</code></sub>
+      <br><sub>OneBottleInSquarePailTask</sub>
+    </td>
+  </tr>
+</table>
+
+</div>
 
 ## Evaluation Results
 
