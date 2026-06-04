@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 import concurrent.futures
 import contextlib
 import threading
@@ -16,6 +17,7 @@ class RecordingPolicy(base_policy.BasePolicy):
     def __init__(self) -> None:
         self.single_calls: list[int] = []
         self.batches: list[list[int]] = []
+        self.warmup_batches: list[int] = []
 
     def infer(self, obs: dict) -> dict:
         request_id = int(obs["id"])
@@ -26,6 +28,15 @@ class RecordingPolicy(base_policy.BasePolicy):
         request_ids = [int(item["id"]) for item in obs]
         self.batches.append(request_ids)
         return [{"actions": np.asarray([request_id])} for request_id in request_ids]
+
+    def warmup_many(self, obs: dict, batch_sizes: Sequence[int]) -> None:
+        self.warmup_batches.extend(batch_sizes)
+        request_id = int(obs["id"])
+        for batch_size in batch_sizes:
+            if batch_size == 1:
+                self.single_calls.append(request_id)
+            else:
+                self.batches.append([request_id] * batch_size)
 
 
 class BlockingPolicy(RecordingPolicy):
@@ -212,6 +223,110 @@ def test_batch_worker_can_pad_to_power_of_two_bucket() -> None:
 
         try:
             results = await asyncio.gather(*(server._infer_action({"id": i}) for i in range(3)))  # noqa: SLF001
+        finally:
+            await _stop_worker(worker)
+
+        assert policy.batches == [[0, 1, 2, 2]]
+        assert [int(output["actions"][0]) for output, _ in results] == [0, 1, 2]
+        assert [timing["batch_size"] for _, timing in results] == [3, 3, 3]
+        assert [timing["padded_batch_size"] for _, timing in results] == [4, 4, 4]
+
+    asyncio.run(run())
+
+
+def test_batch_worker_warms_bucket_sizes_once_from_first_request() -> None:
+    async def run() -> None:
+        policy = RecordingPolicy()
+        server = websocket_policy_server.WebsocketPolicyServer(
+            policy,
+            max_batch_size=8,
+            min_batch_size=2,
+            max_batch_wait_ms=100,
+            pad_to_batch_bucket=True,
+            warmup_batch_buckets=True,
+        )
+        server._request_queue = asyncio.Queue()  # noqa: SLF001
+        worker = asyncio.create_task(server._batch_worker())  # noqa: SLF001
+
+        try:
+            first_results = await asyncio.gather(*(server._infer_action({"id": i}) for i in range(2)))  # noqa: SLF001
+            second_results = await asyncio.gather(*(server._infer_action({"id": i}) for i in range(2, 4)))  # noqa: SLF001
+        finally:
+            await _stop_worker(worker)
+
+        assert policy.warmup_batches == [1, 2, 4, 8]
+        assert policy.single_calls == [0]
+        assert policy.batches == [
+            [0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1],
+            [2, 3],
+        ]
+        assert [int(output["actions"][0]) for output, _ in first_results + second_results] == [0, 1, 2, 3]
+        assert all("warmup_ms" in timing for _, timing in first_results)
+        assert all("warmup_ms" not in timing for _, timing in second_results)
+
+    asyncio.run(run())
+
+
+def test_bucket_aware_batching_waits_for_next_bucket() -> None:
+    async def run() -> None:
+        policy = RecordingPolicy()
+        server = websocket_policy_server.WebsocketPolicyServer(
+            policy,
+            max_batch_size=4,
+            min_batch_size=2,
+            max_batch_wait_ms=100,
+            pad_to_batch_bucket=True,
+            bucket_aware_batching=True,
+        )
+        server._request_queue = asyncio.Queue()  # noqa: SLF001
+        worker = asyncio.create_task(server._batch_worker())  # noqa: SLF001
+
+        try:
+            waiting_results = [asyncio.create_task(server._infer_action({"id": i})) for i in range(3)]  # noqa: SLF001
+            await _wait_until(
+                lambda: server._active_collection_batch is not None  # noqa: SLF001
+                and len(server._active_collection_batch) == 3,  # noqa: SLF001
+            )
+            await asyncio.sleep(0.01)
+            assert policy.batches == []
+            assert all(not result.done() for result in waiting_results)
+
+            waiting_results.append(asyncio.create_task(server._infer_action({"id": 3})))  # noqa: SLF001
+            results = await asyncio.gather(*waiting_results)
+        finally:
+            await _stop_worker(worker)
+
+        assert policy.batches == [[0, 1, 2, 3]]
+        assert [int(output["actions"][0]) for output, _ in results] == [0, 1, 2, 3]
+        assert [timing["batch_size"] for _, timing in results] == [4, 4, 4, 4]
+
+    asyncio.run(run())
+
+
+def test_bucket_aware_batching_flushes_partial_batch_after_wait() -> None:
+    async def run() -> None:
+        policy = RecordingPolicy()
+        server = websocket_policy_server.WebsocketPolicyServer(
+            policy,
+            max_batch_size=4,
+            min_batch_size=2,
+            max_batch_wait_ms=20,
+            pad_to_batch_bucket=True,
+            bucket_aware_batching=True,
+        )
+        server._request_queue = asyncio.Queue()  # noqa: SLF001
+        worker = asyncio.create_task(server._batch_worker())  # noqa: SLF001
+
+        try:
+            waiting_results = [asyncio.create_task(server._infer_action({"id": i})) for i in range(3)]  # noqa: SLF001
+            await _wait_until(
+                lambda: server._active_collection_batch is not None  # noqa: SLF001
+                and len(server._active_collection_batch) == 3,  # noqa: SLF001
+            )
+            results = await asyncio.gather(*waiting_results)
         finally:
             await _stop_worker(worker)
 

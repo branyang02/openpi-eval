@@ -187,6 +187,23 @@ class Policy(BasePolicy):
             results.append(result)
         return results
 
+    def warmup_many(self, obs: dict, batch_sizes: Sequence[int]) -> None:
+        if not batch_sizes:
+            return
+
+        rng = None if self._is_pytorch_model else self._rng
+        try:
+            for batch_size in batch_sizes:
+                if batch_size <= 0:
+                    continue
+                if batch_size == 1:
+                    self.infer(obs)
+                else:
+                    self.infer_many([obs] * batch_size)
+        finally:
+            if rng is not None:
+                self._rng = rng
+
     @override
     def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:  # type: ignore[misc]
         if "observation/state" in obs and obs["observation/state"].ndim == 2:

@@ -38,6 +38,8 @@ class WebsocketPolicyServer:
         max_batch_wait_ms: float = 0.0,
         min_batch_size: int = 1,
         pad_to_batch_bucket: bool = False,
+        warmup_batch_buckets: bool = False,
+        bucket_aware_batching: bool = False,
     ) -> None:
         self._policy = policy
         self._host = host
@@ -46,12 +48,18 @@ class WebsocketPolicyServer:
         self._min_batch_size = min(self._max_batch_size, max(1, int(min_batch_size)))
         self._max_batch_wait_s = max(0.0, float(max_batch_wait_ms) / 1000)
         self._pad_to_batch_bucket = bool(pad_to_batch_bucket)
+        self._warmup_batch_buckets = bool(warmup_batch_buckets)
+        self._bucket_aware_batching = bool(bucket_aware_batching)
+        self._bucket_warmup_complete = False
         self._metadata = dict(metadata or {})
         self._metadata["microbatch"] = {
             "max_batch_size": self._max_batch_size,
             "min_batch_size": self._min_batch_size,
             "max_batch_wait_ms": self._max_batch_wait_s * 1000,
             "pad_to_batch_bucket": self._pad_to_batch_bucket,
+            "warmup_batch_buckets": self._warmup_batch_buckets,
+            "bucket_aware_batching": self._bucket_aware_batching,
+            "batch_buckets": self._batch_bucket_sizes(),
         }
         self._request_queue: asyncio.Queue[_PendingRequest] | None = None
         self._ready_batch_queue: asyncio.Queue[list[_PendingRequest]] | None = None
@@ -71,11 +79,14 @@ class WebsocketPolicyServer:
             batch_worker = asyncio.create_task(self._batch_worker())
             logger.info(
                 "Enabled inference microbatching: max_batch_size=%d, min_batch_size=%d, "
-                "max_batch_wait_ms=%.3f, pad_to_batch_bucket=%s",
+                "max_batch_wait_ms=%.3f, pad_to_batch_bucket=%s, "
+                "warmup_batch_buckets=%s, bucket_aware_batching=%s",
                 self._max_batch_size,
                 self._min_batch_size,
                 self._max_batch_wait_s * 1000,
                 self._pad_to_batch_bucket,
+                self._warmup_batch_buckets,
+                self._bucket_aware_batching,
             )
 
         async with _server.serve(
@@ -196,7 +207,7 @@ class WebsocketPolicyServer:
             self._active_inference_batch = active_batch
             try:
                 start_time = time.monotonic()
-                outputs, infer_ms, padded_batch_size = await asyncio.to_thread(
+                outputs, infer_ms, padded_batch_size, warmup_ms = await asyncio.to_thread(
                     self._run_policy_batch,
                     active_batch,
                 )
@@ -228,6 +239,8 @@ class WebsocketPolicyServer:
                     "padded_batch_size": padded_batch_size,
                     "queue_wait_ms": (start_time - request.enqueued_time) * 1000,
                 }
+                if warmup_ms > 0:
+                    timing["warmup_ms"] = warmup_ms
                 request.future.set_result((output, timing))
 
     async def _collect_batch(self) -> list[_PendingRequest]:
@@ -252,7 +265,7 @@ class WebsocketPolicyServer:
                     break
 
                 if self._model_ready_event.is_set():
-                    if len(batch) >= self._min_batch_size:
+                    if not self._should_wait_for_bucket(batch):
                         break
 
                     timeout = deadline - time.monotonic()
@@ -294,15 +307,16 @@ class WebsocketPolicyServer:
         assert self._request_queue is not None
 
         deadline = time.monotonic() + self._max_batch_wait_s
-        while len(batch) < self._max_batch_size:
-            while len(batch) < self._max_batch_size:
+        while self._should_wait_after_model_ready(batch):
+            target_batch_size = self._model_ready_fill_target_batch_size(len(batch))
+            while len(batch) < target_batch_size:
                 try:
                     batch.append(self._request_queue.get_nowait())
                     deadline = time.monotonic() + self._max_batch_wait_s
                 except asyncio.QueueEmpty:
                     break
 
-            if len(batch) >= self._max_batch_size:
+            if not self._should_wait_after_model_ready(batch):
                 break
 
             timeout = deadline - time.monotonic()
@@ -314,7 +328,8 @@ class WebsocketPolicyServer:
             except TimeoutError:
                 break
 
-    def _run_policy_batch(self, batch: list[_PendingRequest]) -> tuple[list[dict], float, int]:
+    def _run_policy_batch(self, batch: list[_PendingRequest]) -> tuple[list[dict], float, int, float]:
+        warmup_ms = self._maybe_warmup_batch_buckets(batch[0].obs)
         start_time = time.monotonic()
         padded_batch_size = len(batch)
         if len(batch) == 1:
@@ -326,7 +341,7 @@ class WebsocketPolicyServer:
                 batch_obs.extend([batch_obs[-1]] * (padded_batch_size - len(batch_obs)))
             outputs = self._policy.infer_many(batch_obs)[: len(batch)]
         infer_ms = (time.monotonic() - start_time) * 1000
-        return outputs, infer_ms, padded_batch_size
+        return outputs, infer_ms, padded_batch_size, warmup_ms
 
     def _padded_batch_size(self, batch_size: int) -> int:
         if not self._pad_to_batch_bucket:
@@ -334,6 +349,53 @@ class WebsocketPolicyServer:
         if batch_size <= 1:
             return batch_size
         return min(self._max_batch_size, 1 << (batch_size - 1).bit_length())
+
+    def _batch_bucket_sizes(self) -> list[int]:
+        sizes = [1]
+        size = 2
+        while size < self._max_batch_size:
+            sizes.append(size)
+            size *= 2
+        if self._max_batch_size not in sizes:
+            sizes.append(self._max_batch_size)
+        return sizes
+
+    def _dispatch_target_batch_size(self, batch_size: int) -> int:
+        if batch_size <= 0:
+            return self._min_batch_size
+        if self._bucket_aware_batching and self._pad_to_batch_bucket:
+            return min(self._max_batch_size, max(self._min_batch_size, self._padded_batch_size(batch_size)))
+        return self._min_batch_size
+
+    def _model_ready_fill_target_batch_size(self, batch_size: int) -> int:
+        if self._bucket_aware_batching and self._pad_to_batch_bucket:
+            return self._dispatch_target_batch_size(batch_size)
+        return self._max_batch_size
+
+    def _should_wait_for_bucket(self, batch: list[_PendingRequest]) -> bool:
+        active_batch_size = sum(not request.future.cancelled() for request in batch)
+        if active_batch_size >= self._max_batch_size:
+            return False
+        return active_batch_size < self._dispatch_target_batch_size(active_batch_size)
+
+    def _should_wait_after_model_ready(self, batch: list[_PendingRequest]) -> bool:
+        active_batch_size = sum(not request.future.cancelled() for request in batch)
+        if active_batch_size >= self._max_batch_size:
+            return False
+        return active_batch_size < self._model_ready_fill_target_batch_size(active_batch_size)
+
+    def _maybe_warmup_batch_buckets(self, obs: dict) -> float:
+        if not self._warmup_batch_buckets or self._bucket_warmup_complete:
+            return 0.0
+
+        batch_sizes = self._batch_bucket_sizes()
+        start_time = time.monotonic()
+        logger.info("Warming policy batch buckets: %s", batch_sizes)
+        self._policy.warmup_many(obs, batch_sizes)
+        self._bucket_warmup_complete = True
+        warmup_ms = (time.monotonic() - start_time) * 1000
+        logger.info("Policy batch bucket warmup completed in %.3f ms", warmup_ms)
+        return warmup_ms
 
     async def _handler(self, websocket: _server.ServerConnection):
         logger.info(f"Connection from {websocket.remote_address} opened")

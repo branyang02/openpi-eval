@@ -15,6 +15,16 @@ class BasePolicy(abc.ABC):
         """
         return [self.infer(item) for item in obs]
 
+    def warmup_many(self, obs: Dict, batch_sizes: Sequence[int]) -> None:
+        """Warm up batched inference for the provided observation shape.
+
+        Implementations may override this to compile/cache selected batch sizes
+        without changing future policy outputs. The default is intentionally a
+        no-op because generic policies may have stateful or non-idempotent
+        inference.
+        """
+        del obs, batch_sizes
+
     def reset(self) -> None:
         """Reset the policy to its initial state."""
         pass
