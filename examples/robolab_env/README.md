@@ -16,11 +16,9 @@
 
 ## Setup
 
-Clean reinstall of the RoboLab submodule:
+Initialize the RoboLab submodule and download its LFS assets:
 
 ```bash
-git submodule deinit -f third_party/robolab
-rm -rf third_party/robolab .git/modules/third_party/robolab
 GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive third_party/robolab
 git -C third_party/robolab lfs pull
 ```
@@ -132,3 +130,14 @@ uv run pytest tests/ -v
 ```
 
 Full simulator evaluation is manual because it requires Isaac Sim, RoboLab assets, and GPU memory.
+
+## Troubleshooting
+
+If the RoboLab checkout is corrupted or stuck with stale LFS pointers, reset only that submodule before reinstalling:
+
+```bash
+git submodule deinit -f third_party/robolab
+rm -rf third_party/robolab .git/modules/third_party/robolab
+GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive third_party/robolab
+git -C third_party/robolab lfs pull
+```
