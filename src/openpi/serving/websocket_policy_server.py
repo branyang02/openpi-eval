@@ -48,6 +48,8 @@ class WebsocketPolicyServer:
         self._max_batch_wait_s = max(0.0, float(max_batch_wait_ms) / 1000)
         self._pad_to_batch_bucket = bool(pad_to_batch_bucket)
         self._request_queue: asyncio.Queue[_PendingRequest] | None = None
+        self._ready_batch_queue: asyncio.Queue[list[_PendingRequest]] | None = None
+        self._model_ready_event: asyncio.Event | None = None
         logging.getLogger("websockets.server").setLevel(logging.INFO)
 
     def serve_forever(self) -> None:
@@ -97,30 +99,41 @@ class WebsocketPolicyServer:
 
     async def _batch_worker(self) -> None:
         assert self._request_queue is not None
+        self._ready_batch_queue = asyncio.Queue()
+        self._model_ready_event = asyncio.Event()
+
+        collector = asyncio.create_task(self._batch_collector_worker())
+        inference_worker = asyncio.create_task(self._batch_inference_worker())
+        try:
+            await asyncio.gather(collector, inference_worker)
+        finally:
+            for task in (collector, inference_worker):
+                task.cancel()
+            for task in (collector, inference_worker):
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+    async def _batch_collector_worker(self) -> None:
+        assert self._ready_batch_queue is not None
+        assert self._model_ready_event is not None
 
         while True:
-            first = await self._request_queue.get()
-            batch = [first]
-            deadline = time.monotonic() + self._max_batch_wait_s
+            batch = await self._collect_batch()
+            active_batch = [request for request in batch if not request.future.cancelled()]
+            if active_batch:
+                if self._model_ready_event.is_set():
+                    self._model_ready_event.clear()
+                await self._ready_batch_queue.put(active_batch)
 
-            while len(batch) < self._max_batch_size:
-                try:
-                    batch.append(self._request_queue.get_nowait())
-                    continue
-                except asyncio.QueueEmpty:
-                    pass
+    async def _batch_inference_worker(self) -> None:
+        assert self._ready_batch_queue is not None
+        assert self._model_ready_event is not None
 
-                if len(batch) >= self._min_batch_size:
-                    break
-
-                timeout = deadline - time.monotonic()
-                if timeout <= 0:
-                    break
-                try:
-                    batch.append(await asyncio.wait_for(self._request_queue.get(), timeout=timeout))
-                except TimeoutError:
-                    break
-
+        while True:
+            if self._ready_batch_queue.empty():
+                self._model_ready_event.set()
+            batch = await self._ready_batch_queue.get()
+            self._model_ready_event.clear()
             active_batch = [request for request in batch if not request.future.cancelled()]
             if not active_batch:
                 continue
@@ -154,6 +167,81 @@ class WebsocketPolicyServer:
                     "queue_wait_ms": (start_time - request.enqueued_time) * 1000,
                 }
                 request.future.set_result((output, timing))
+
+    async def _collect_batch(self) -> list[_PendingRequest]:
+        assert self._request_queue is not None
+        assert self._model_ready_event is not None
+
+        first = await self._request_queue.get()
+        batch = [first]
+        deadline = time.monotonic() + self._max_batch_wait_s
+
+        while len(batch) < self._max_batch_size:
+            while len(batch) < self._max_batch_size:
+                try:
+                    batch.append(self._request_queue.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
+
+            if len(batch) >= self._max_batch_size:
+                break
+
+            if self._model_ready_event.is_set():
+                if len(batch) >= self._min_batch_size:
+                    break
+
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    break
+                try:
+                    batch.append(await asyncio.wait_for(self._request_queue.get(), timeout=timeout))
+                except TimeoutError:
+                    break
+                continue
+
+            get_request = asyncio.create_task(self._request_queue.get())
+            wait_for_model = asyncio.create_task(self._model_ready_event.wait())
+            done, pending = await asyncio.wait(
+                {get_request, wait_for_model},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            for task in pending:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+            if get_request in done:
+                batch.append(get_request.result())
+            if wait_for_model in done:
+                await self._fill_waiting_batch_after_model_ready(batch)
+                break
+
+        return batch
+
+    async def _fill_waiting_batch_after_model_ready(self, batch: list[_PendingRequest]) -> None:
+        assert self._request_queue is not None
+
+        deadline = time.monotonic() + self._max_batch_wait_s
+        while len(batch) < self._max_batch_size:
+            while len(batch) < self._max_batch_size:
+                try:
+                    batch.append(self._request_queue.get_nowait())
+                    deadline = time.monotonic() + self._max_batch_wait_s
+                except asyncio.QueueEmpty:
+                    break
+
+            if len(batch) >= self._max_batch_size:
+                break
+
+            timeout = deadline - time.monotonic()
+            if timeout <= 0:
+                break
+            try:
+                batch.append(await asyncio.wait_for(self._request_queue.get(), timeout=timeout))
+                deadline = time.monotonic() + self._max_batch_wait_s
+            except TimeoutError:
+                break
 
     def _run_policy_batch(self, batch: list[_PendingRequest]) -> tuple[list[dict], float, int]:
         start_time = time.monotonic()
