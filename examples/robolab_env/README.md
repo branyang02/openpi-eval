@@ -2,10 +2,10 @@
 
 [RoboLab](https://research.nvidia.com/labs/srl/projects/robolab) is NVIDIA's Isaac Lab benchmark for multi-task robot manipulation.
 
-This example uses the latest RoboLab submodule and its Pi0-family runner. The simulator runs in this Python 3.11 environment and talks to the root OpenPI policy server over WebSocket.
+This example uses its own Python 3.11 venv. The simulator runs here and talks to the root policy server over WebSocket.
 
-- `main.py`: thin wrapper around `third_party/robolab/policies/pi0_family/run.py`.
-- Output: `third_party/robolab/output/<timestamp>_<policy>/`.
+- `main.py`: one or more named RoboLab tasks.
+- `eval_all.py`: one subprocess per task in the benchmark set or an explicit task list.
 
 ## Example Rollout
 
@@ -26,35 +26,36 @@ uv venv --python 3.11
 uv sync
 ```
 
-RoboLab installs Isaac Sim 5.0 and Isaac Lab 2.2.0 through `uv`. The RoboLab assets are about 7 GB. Full evaluation is expected on Linux NVIDIA GPU hosts.
+RoboLab installs Isaac Sim 5.0 and Isaac Lab 2.2.0 through `uv`. Full evaluation expects a Linux host with an NVIDIA GPU, accepted Omniverse EULA, and the RoboLab assets downloaded by Git LFS.
 
 ## Configs
 
 Registered configs:
 
 - `pi05_droid_jointpos`
-- `pi0_droid_jointpos`
 - `pi0_fast_droid_jointpos`
 
-`pi05_droid_jointpos` is the default example config for the commands below.
-`pi0_fast_droid_jointpos` uses the same runner and is smoke-tested with the
-released DROID pi0_fast checkpoint; this is not a RoboLab release evaluation
-result.
+Both configs use the DROID joint-position action space and RoboLab's Pi0-family client.
+
+## Checkpoints
+
+- `pi05_droid_jointpos`: `gs://openpi-assets-simeval/pi05_droid_jointpos`
+- `pi0_fast_droid_jointpos`: `gs://openpi-assets-simeval/pi0_fast_droid_jointpos`
+
+The policy server can read these checkpoint paths directly.
 
 ## Serve
 
-Start the policy server from the repo root. JAX serving is the default path.
+Start the policy server from the repo root.
 
 ```bash
+# pi0.5, JAX backend
 CUDA_VISIBLE_DEVICES=1 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
 uv run scripts/serve_policy.py policy:checkpoint \
     --policy.config=pi05_droid_jointpos \
     --policy.dir=gs://openpi-assets-simeval/pi05_droid_jointpos
-```
 
-For the DROID pi0_fast checkpoint:
-
-```bash
+# pi0-FAST, JAX backend
 CUDA_VISIBLE_DEVICES=1 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
 uv run scripts/serve_policy.py policy:checkpoint \
     --policy.config=pi0_fast_droid_jointpos \
@@ -66,17 +67,25 @@ uv run scripts/serve_policy.py policy:checkpoint \
 Run clients from `examples/robolab_env`.
 
 ```bash
+# Single task
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python main.py --policy pi05 --headless \
-    --task BananaInBowlTask --num-envs 10 --num-runs 1 --enable-subtask
-```
+uv run python main.py --policy pi05 --task BananaInBowlTask \
+    --num-envs 1 --num-runs 1 --video-mode none
 
-Use the matching client variant when serving pi0_fast:
-
-```bash
+# Full benchmark set
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python main.py --policy pi0_fast --headless \
-    --task BananaInBowlTask --num-envs 1 --num-runs 1 --enable-subtask
+uv run python eval_all.py --policy pi05 --num-envs 10 --num-runs 1
+
+# Explicit task list
+CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
+uv run python eval_all.py --policy pi05 \
+    --tasks BananaInBowlTask OneBottleInSquarePailTask \
+    --num-envs 1 --num-runs 1
+
+# pi0-FAST single task
+CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
+uv run python main.py --policy pi0_fast --task BananaInBowlTask \
+    --num-envs 1 --num-runs 1 --video-mode none
 ```
 
 RoboLab vectorizes episodes inside one Isaac Sim process:
@@ -85,24 +94,30 @@ RoboLab vectorizes episodes inside one Isaac Sim process:
 episodes per task = --num-envs * --num-runs
 ```
 
-Use `--num-envs` for parallel episodes and increase `--num-runs` only when the desired batch does not fit in GPU memory. For adaptive sampling, use RoboLab's `--num-episodes-adaptive MAX_N`.
+Increase `--num-envs` before increasing `--num-runs`. Use `--num-episodes-adaptive MAX_N` for RoboLab's adaptive sampling mode. `eval_all.py` launches one `main.py` subprocess per task; keep `--num-workers 1` unless the host has enough CPU/GPU memory for multiple Isaac Sim processes.
 
-Smoke-test multiple tasks with a small batch:
+Output layout:
 
-```bash
-CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python main.py --policy pi05 --headless \
-    --task BananaInBowlTask RubiksCubeAndBananaTask --num-envs 1 --num-runs 1 \
-    --video-mode none
+```text
+examples/robolab_env/output/<policy>-<task_set>/
+|-- results.json
+|-- episode_results.jsonl
+|-- parallel_logs/task_NN_<task_name>.log
+`-- <task_name>/
+    |-- env_cfg.json
+    |-- log_<run>_env<env>.json
+    |-- run_<run>.hdf5
+    `-- *.mp4  # when --video-mode is not none
 ```
 
-The default connection is `localhost:8000`; pass `--remote-host`, `--remote-port`, or `--remote-uri` for remote policy servers.
+Generated results are written to `examples/robolab_env/output/` and should be
+published only after a fresh release evaluation.
 
 ## Results
 
-No RoboLab release evaluation results are included in this release. Full evaluation requires Isaac Sim, RoboLab assets, and sustained NVIDIA GPU time.
+No RoboLab release evaluation results are included in this release.
 
-Generated results live under `third_party/robolab/output/` and should be published only after a fresh release evaluation. RoboLab's dashboard can inspect those runs:
+Generated RoboLab outputs can also be inspected with the upstream dashboard:
 
 ```bash
 cd third_party/robolab
@@ -116,4 +131,15 @@ cd examples/robolab_env
 uv run pytest tests/ -v
 ```
 
-Full simulator evaluation is manual because it requires Isaac Sim, RoboLab assets, and an NVIDIA GPU.
+Full simulator evaluation is manual because it requires Isaac Sim, RoboLab assets, and GPU memory.
+
+## Troubleshooting
+
+If the RoboLab checkout is corrupted or stuck with stale LFS pointers, reset only that submodule before reinstalling:
+
+```bash
+git submodule deinit -f third_party/robolab
+rm -rf third_party/robolab .git/modules/third_party/robolab
+GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive third_party/robolab
+git -C third_party/robolab lfs pull
+```
