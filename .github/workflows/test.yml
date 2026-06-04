@@ -5,7 +5,7 @@ on:
       - "*"
   workflow_dispatch:
   schedule:
-    - cron: "0 9 * * 1"
+    - cron: "0 9 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -43,7 +43,7 @@ jobs:
         run: uv run pytest --strict-markers -m "not manual and not slow" --durations=20
 
   test-main-slow:
-    name: Tests (main slow, CPU)
+    name: Tests (main slow/nightly, CPU)
     runs-on: ubuntu-24.04
     if: github.event_name != 'pull_request'
     env:

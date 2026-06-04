@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from openpi.models import tokenizer as _tokenizer
 
@@ -11,6 +12,7 @@ def test_tokenize():
     assert masks.shape == (10,)
 
 
+@pytest.mark.slow
 def test_fast_tokenizer():
     prompt = "Hello, world!"
     state = np.random.rand(5).astype(np.float32)
