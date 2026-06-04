@@ -14,8 +14,19 @@ def _default_args(**overrides) -> eval_all.Args:
     return eval_all.Args(**overrides)
 
 
-def test_resolve_subset_tasks() -> None:
+def test_resolve_default_all_tasks(tmp_path: pathlib.Path) -> None:
+    task_dir = tmp_path / "third_party" / "robolab" / "robolab" / "tasks" / "benchmark"
+    task_dir.mkdir(parents=True)
+    (task_dir / "b_task.py").write_text("class BTask(Task):\n    pass\n")
+    (task_dir / "a_task.py").write_text("class ATask(Task):\n    pass\n")
+
     args = _default_args()
+
+    assert eval_all._resolve_tasks(args, tmp_path) == ["ATask", "BTask"]
+
+
+def test_resolve_subset_tasks() -> None:
+    args = _default_args(task_set="subset")
 
     assert eval_all._resolve_tasks(args) == eval_all.SUBSET
 
@@ -27,7 +38,8 @@ def test_explicit_tasks_override_task_set() -> None:
 
 
 def test_run_label_marks_explicit_task_lists() -> None:
-    assert eval_all._run_label(_default_args()) == "subset"
+    assert eval_all._run_label(_default_args()) == "all"
+    assert eval_all._run_label(_default_args(task_set="subset")) == "subset"
     assert eval_all._run_label(_default_args(task_set="all")) == "all"
     assert eval_all._run_label(_default_args(tasks=["BananaInBowlTask"])) == "explicit"
 

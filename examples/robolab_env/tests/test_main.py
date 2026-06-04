@@ -41,6 +41,13 @@ def test_default_output_root() -> None:
     assert output_dir == Path(main.__file__).resolve().parent / "output" / "pi05"
 
 
+def test_main_has_no_implicit_default_task() -> None:
+    args = main.Args()
+
+    assert args.task == []
+    assert args.task_dirs == ["benchmark"]
+
+
 def test_run_robolab_rejects_output_dir_with_other_policy_results(tmp_path) -> None:
     repo_root = tmp_path
     (repo_root / "third_party" / "robolab").mkdir(parents=True)

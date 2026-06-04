@@ -3,7 +3,7 @@
 [RoboLab](https://research.nvidia.com/labs/srl/projects/robolab) is NVIDIA's Isaac Lab benchmark for multi-task robot manipulation. This client follows the same shape as the other simulator clients:
 
 - `main.py`: evaluate one or more named RoboLab tasks against an OpenPI policy server.
-- `eval_all.py`: evaluate a curated subset or all benchmark tasks, with per-task logs and one aggregate `results.json`.
+- `eval_all.py`: evaluate all benchmark tasks or an explicit task list, with per-task logs and one aggregate `results.json`.
 - Outputs: `examples/robolab_env/output/...` when launched through this client, or a user-provided `--output-dir`.
 
 ## Example Rollout
@@ -74,18 +74,20 @@ uv run python main.py --policy pi05 \
     --num-envs 4 --num-runs 1 --enable-subtask
 ```
 
-Curated smoke subset through `eval_all.py`:
+All benchmark tasks through `eval_all.py`:
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python eval_all.py --policy pi05 --num-envs 1 --num-runs 1
+uv run python eval_all.py --policy pi05 --num-envs 10 --num-runs 1
 ```
 
-All 120 benchmark tasks:
+Explicit task list through `eval_all.py`:
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python eval_all.py --policy pi05 --task-set all --num-envs 10 --num-runs 1
+uv run python eval_all.py --policy pi05 \
+    --tasks BananaInBowlTask OneBottleInSquarePailTask \
+    --num-envs 1 --num-runs 1
 ```
 
 Use the matching client variant when serving `pi0_fast`:

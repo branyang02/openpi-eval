@@ -8,7 +8,7 @@ and an aggregate ``results.json``.
 
 Examples:
     CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES uv run python eval_all.py
-    CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES uv run python eval_all.py --task-set all --num-envs 10
+    CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES uv run python eval_all.py --num-envs 10
     CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES uv run python eval_all.py --tasks BananaInBowlTask OneBottleInSquarePailTask
 
 Output layout:
@@ -61,9 +61,9 @@ class Args:
     port: int = 8000
 
     policy: PolicyVariant = "pi05"
-    # ``subset`` uses the curated smoke list above. ``all`` discovers every
-    # benchmark task class in third_party/robolab.
-    task_set: str = "subset"
+    # ``all`` discovers every benchmark task class in third_party/robolab.
+    # ``subset`` is available for quick smoke runs.
+    task_set: str = "all"
     # Explicit task class names. Overrides --task-set when non-empty.
     tasks: List[str] = dataclasses.field(default_factory=list)
     # RoboLab task subdirectories to register.

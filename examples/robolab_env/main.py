@@ -16,8 +16,6 @@ import tyro
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _RECORDER_MODULE = "robolab.core.logging.recorder_manager"
-_DEFAULT_TASK_DIRS = ["benchmark"]
-_DEFAULT_TASKS = ["BananaInBowlTask"]
 
 PolicyVariant = Literal["pi0", "pi0_fast", "pi05", "paligemma", "paligemma_fast"]
 VideoMode = Literal["all", "viewport", "sensor", "none"]
@@ -32,13 +30,11 @@ class Args:
     # scripts/serve_policy.py.
     policy: PolicyVariant = "pi05"
     # RoboLab task class names. main.py can run one or more tasks; eval_all.py
-    # launches one main.py subprocess per task for a full task set.
-    task: list[str] = dataclasses.field(default_factory=lambda: list(_DEFAULT_TASKS))
+    # passes one task per subprocess for a full task set.
+    task: list[str] = dataclasses.field(default_factory=list)
     # RoboLab task subdirectories to register. The release tasks live in
     # robolab/tasks/benchmark.
-    task_dirs: list[str] = dataclasses.field(
-        default_factory=lambda: list(_DEFAULT_TASK_DIRS)
-    )
+    task_dirs: list[str] = dataclasses.field(default_factory=lambda: ["benchmark"])
     # Optional RoboLab task tags. If set and --task is empty, RoboLab resolves
     # registered tasks by tag.
     tag: list[str] = dataclasses.field(default_factory=list)
