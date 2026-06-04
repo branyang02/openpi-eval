@@ -156,17 +156,9 @@ class TestLiberoEnv:
             "task_id",
             "task_name",
             "task_description",
-            "policy_calls",
-            "env_steps",
-            "server_batch_size_counts",
-            "server_padded_batch_size_counts",
         }
         assert result["success_rate"] in {0.0, 1.0}
         assert result["num_episodes"] == 1.0
-        assert result["policy_calls"] >= 1.0
-        assert result["env_steps"] >= 1.0
-        assert result["server_batch_size_counts"] == {}
-        assert result["server_padded_batch_size_counts"] == {}
 
         # eval_task writes one .mp4 per episode under
         # <output_dir>/<task_id>-<task_name>/episode_NNN.mp4

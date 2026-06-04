@@ -15,14 +15,12 @@ from __future__ import annotations
 
 import collections
 import dataclasses
-import json
 import logging
 import math
 import os
 import pathlib
 import re
 import sys
-import time
 from typing import Deque, Dict, List, Literal, Optional
 
 _LIBERO_REPO_ROOT = (
@@ -89,18 +87,6 @@ class Args:
     )
 
     fps: int = 10
-    # Whether to write per-episode rollout videos. ``record`` keeps the normal
-    # evaluator behavior; ``none`` keeps MuJoCo rendering for policy inputs but
-    # skips video encoding for throughput benchmarks.
-    video_mode: Literal["record", "none"] = "record"
-    # Progress bars are useful for interactive single-task runs, but noisy when
-    # many subprocesses write logs concurrently.
-    progress_mode: Literal["auto", "off"] = "auto"
-    # Optional wall-clock barrier for synchronized subprocess smoke runs after
-    # each env has reset to its initial state.
-    start_after_unix_s: Optional[float] = None
-    # Forwarded to robosuite/MuJoCo. -1 keeps robosuite's default device choice.
-    render_gpu_device_id: int = -1
 
     # RNG seed. Threads through to the env physics seed and np.random, AND
     # acts as an offset into LIBERO's canonical initial-state list. Episode k
@@ -163,9 +149,7 @@ def sanitize_name(name: str) -> str:
     return slug or "task"
 
 
-def make_env(
-    task, resolution: int, seed: int, render_gpu_device_id: int = -1
-) -> OffScreenRenderEnv:
+def make_env(task, resolution: int, seed: int) -> OffScreenRenderEnv:
     task_bddl_file = (
         pathlib.Path(get_libero_path("bddl_files"))
         / task.problem_folder
@@ -175,7 +159,6 @@ def make_env(
         bddl_file_name=str(task_bddl_file),
         camera_heights=resolution,
         camera_widths=resolution,
-        render_gpu_device_id=render_gpu_device_id,
     )
     env.seed(seed)
     return env
@@ -265,17 +248,8 @@ def eval_task(
     )
     os.makedirs(task_output_dir, exist_ok=True)
 
-    env = make_env(
-        task,
-        LIBERO_ENV_RESOLUTION,
-        args.seed,
-        render_gpu_device_id=args.render_gpu_device_id,
-    )
+    env = make_env(task, LIBERO_ENV_RESOLUTION, args.seed)
     successes = []
-    policy_calls = 0
-    env_steps = 0
-    server_batch_size_counts = collections.Counter()
-    server_padded_batch_size_counts = collections.Counter()
 
     # --seed acts as an offset into LIBERO's canonical initial-state list so
     # different seeds evaluate on disjoint start conditions. Pick seeds at least
@@ -286,53 +260,33 @@ def eval_task(
             state_idx = (args.seed + episode) % num_init_states
             env.reset()
             obs = env.set_init_state(initial_states[state_idx])
-            if args.start_after_unix_s is not None:
-                sleep_s = args.start_after_unix_s - time.time()
-                if sleep_s > 0:
-                    time.sleep(sleep_s)
             action_plan = collections.deque()  # type: Deque[np.ndarray]
             success = False
             video_path = os.path.join(
                 task_output_dir, "episode_{:03d}.mp4".format(episode)
             )
-            video_writer = (
-                iio.get_writer(video_path, fps=args.fps)
-                if args.video_mode == "record"
-                else None
-            )
 
-            try:
+            with iio.get_writer(video_path, fps=args.fps) as video:
                 pbar = tqdm(
                     range(args.num_steps_wait + max_steps),
                     desc="[{}] Episode {}/{}".format(
                         task_name, episode + 1, args.num_episodes
                     ),
                     leave=False,
-                    disable=args.progress_mode == "off",
                 )
                 for step in pbar:
-                    if video_writer is not None:
-                        video_writer.append_data(render_frame(obs, args.render_cameras))
+                    video.append_data(render_frame(obs, args.render_cameras))
 
                     if step < args.num_steps_wait:
                         obs, reward, done, info = env.step(LIBERO_DUMMY_ACTION)
-                        env_steps += 1
                         continue
 
                     if not action_plan:
                         element = prepare_policy_inputs(obs, args.resize_size)
                         element["prompt"] = task_description
-                        response = policy.infer(element)
-                        policy_calls += 1
-                        server_timing = response.get("server_timing", {})
-                        if server_timing:
-                            batch_size = int(server_timing.get("batch_size", 1))
-                            padded_batch_size = int(
-                                server_timing.get("padded_batch_size", batch_size)
-                            )
-                            server_batch_size_counts[batch_size] += 1
-                            server_padded_batch_size_counts[padded_batch_size] += 1
-                        action_chunk = np.asarray(response["actions"], dtype=np.float32)
+                        action_chunk = np.asarray(
+                            policy.infer(element)["actions"], dtype=np.float32
+                        )
                         if action_chunk.ndim != 2:
                             raise ValueError(
                                 "Model output must have shape (action_horizon, action_dim), got {}".format(
@@ -350,14 +304,10 @@ def eval_task(
 
                     action = action_plan.popleft()
                     obs, reward, done, info = env.step(action.tolist())
-                    env_steps += 1
                     success = bool(done)
                     pbar.set_postfix(success=str(success))
                     if success:
                         break
-            finally:
-                if video_writer is not None:
-                    video_writer.close()
 
             successes.append(success)
             logger.info(
@@ -366,7 +316,7 @@ def eval_task(
                 episode + 1,
                 args.num_episodes,
                 success,
-                video_path if args.video_mode == "record" else "disabled",
+                video_path,
             )
     finally:
         env.close()
@@ -377,10 +327,6 @@ def eval_task(
         "task_id": float(task_id),
         "task_name": task_name,
         "task_description": task_description,
-        "policy_calls": float(policy_calls),
-        "env_steps": float(env_steps),
-        "server_batch_size_counts": dict(server_batch_size_counts),
-        "server_padded_batch_size_counts": dict(server_padded_batch_size_counts),
     }
 
 
@@ -420,31 +366,13 @@ def main(args: Args) -> None:
         output_dir,
     )
     logger.info(
-        "[%s/%s/task_%02d] success_rate=%.2f (%d/%d), policy_calls=%d, env_steps=%d",
+        "[%s/%s/task_%02d] success_rate=%.2f (%d/%d)",
         args.task_suite_name,
         result["task_name"],
         args.task_id,
         result["success_rate"],
         int(result["success_rate"] * result["num_episodes"]),
         int(result["num_episodes"]),
-        int(result["policy_calls"]),
-        int(result["env_steps"]),
-    )
-    logger.info(
-        "metrics_json=%s",
-        json.dumps(
-            {
-                "success_rate": result["success_rate"],
-                "num_episodes": result["num_episodes"],
-                "policy_calls": result["policy_calls"],
-                "env_steps": result["env_steps"],
-                "server_batch_size_counts": result["server_batch_size_counts"],
-                "server_padded_batch_size_counts": result[
-                    "server_padded_batch_size_counts"
-                ],
-            },
-            sort_keys=True,
-        ),
     )
 
 
