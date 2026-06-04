@@ -1,11 +1,10 @@
 # RoboLab
 
-[RoboLab](https://research.nvidia.com/labs/srl/projects/robolab) is NVIDIA's Isaac Lab benchmark for multi-task robot manipulation.
+[RoboLab](https://research.nvidia.com/labs/srl/projects/robolab) is NVIDIA's Isaac Lab benchmark for multi-task robot manipulation. This client follows the same shape as the other simulator clients:
 
-This example uses the latest RoboLab submodule and its Pi0-family runner. The simulator runs in this Python 3.11 environment and talks to the root OpenPI policy server over WebSocket.
-
-- `main.py`: thin wrapper around `third_party/robolab/policies/pi0_family/run.py`.
-- Output: `third_party/robolab/output/<timestamp>_<policy>/`.
+- `main.py`: evaluate one or more named RoboLab tasks against an OpenPI policy server.
+- `eval_all.py`: evaluate a curated subset or all benchmark tasks, with per-task logs and one aggregate `results.json`.
+- Outputs: `examples/robolab_env/output/...` when launched through this client, or a user-provided `--output-dir`.
 
 ## Example Rollout
 
@@ -17,29 +16,24 @@ This example uses the latest RoboLab submodule and its Pi0-family runner. The si
 
 ## Setup
 
+Clean reinstall of the RoboLab submodule:
+
 ```bash
+git submodule deinit -f third_party/robolab
+rm -rf third_party/robolab .git/modules/third_party/robolab
 GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive third_party/robolab
 git -C third_party/robolab lfs pull
+```
 
+Create the RoboLab client environment:
+
+```bash
 cd examples/robolab_env
 uv venv --python 3.11
 uv sync
 ```
 
-RoboLab installs Isaac Sim 5.0 and Isaac Lab 2.2.0 through `uv`. The RoboLab assets are about 7 GB. Full evaluation is expected on Linux NVIDIA GPU hosts.
-
-## Configs
-
-Registered configs:
-
-- `pi05_droid_jointpos`
-- `pi0_droid_jointpos`
-- `pi0_fast_droid_jointpos`
-
-`pi05_droid_jointpos` is the default example config for the commands below.
-`pi0_fast_droid_jointpos` uses the same runner and is smoke-tested with the
-released DROID pi0_fast checkpoint; this is not a RoboLab release evaluation
-result.
+RoboLab installs Isaac Sim 5.0 and Isaac Lab 2.2.0 through `uv`. Full evaluation expects a Linux host with an NVIDIA GPU, accepted Omniverse EULA, and the RoboLab assets downloaded by Git LFS.
 
 ## Serve
 
@@ -52,7 +46,7 @@ uv run scripts/serve_policy.py policy:checkpoint \
     --policy.dir=gs://openpi-assets-simeval/pi05_droid_jointpos
 ```
 
-For the DROID pi0_fast checkpoint:
+For the DROID `pi0_fast` checkpoint:
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
@@ -63,20 +57,45 @@ uv run scripts/serve_policy.py policy:checkpoint \
 
 ## Evaluate
 
-Run clients from `examples/robolab_env`.
+Run from `examples/robolab_env`.
+
+Single task:
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python main.py --policy pi05 --headless \
-    --task BananaInBowlTask --num-envs 10 --num-runs 1 --enable-subtask
+uv run python main.py --policy pi05 --task BananaInBowlTask \
+    --num-envs 1 --num-runs 1 --video-mode none
 ```
 
-Use the matching client variant when serving pi0_fast:
+Multiple named tasks in one RoboLab runner:
 
 ```bash
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python main.py --policy pi0_fast --headless \
-    --task BananaInBowlTask --num-envs 1 --num-runs 1 --enable-subtask
+uv run python main.py --policy pi05 \
+    --task BananaInBowlTask OneBottleInSquarePailTask \
+    --num-envs 4 --num-runs 1 --enable-subtask
+```
+
+Curated smoke subset through `eval_all.py`:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
+uv run python eval_all.py --policy pi05 --num-envs 1 --num-runs 1
+```
+
+All 120 benchmark tasks:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
+uv run python eval_all.py --policy pi05 --task-set all --num-envs 10 --num-runs 1
+```
+
+Use the matching client variant when serving `pi0_fast`:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
+uv run python main.py --policy pi0_fast --task BananaInBowlTask \
+    --num-envs 1 --num-runs 1 --video-mode none
 ```
 
 RoboLab vectorizes episodes inside one Isaac Sim process:
@@ -85,24 +104,20 @@ RoboLab vectorizes episodes inside one Isaac Sim process:
 episodes per task = --num-envs * --num-runs
 ```
 
-Use `--num-envs` for parallel episodes and increase `--num-runs` only when the desired batch does not fit in GPU memory. For adaptive sampling, use RoboLab's `--num-episodes-adaptive MAX_N`.
-
-Smoke-test multiple tasks with a small batch:
-
-```bash
-CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
-uv run python main.py --policy pi05 --headless \
-    --task BananaInBowlTask RubiksCubeAndBananaTask --num-envs 1 --num-runs 1 \
-    --video-mode none
-```
-
-The default connection is `localhost:8000`; pass `--remote-host`, `--remote-port`, or `--remote-uri` for remote policy servers.
+Increase `--num-envs` before increasing `--num-runs`. Use `--num-episodes-adaptive MAX_N` for RoboLab's adaptive sampling mode. The default server connection is `0.0.0.0:8000`; pass `--host`, `--port`, or `--remote-uri` for other servers.
 
 ## Results
 
-No RoboLab release evaluation results are included in this release. Full evaluation requires Isaac Sim, RoboLab assets, and sustained NVIDIA GPU time.
+`eval_all.py` writes:
 
-Generated results live under `third_party/robolab/output/` and should be published only after a fresh release evaluation. RoboLab's dashboard can inspect those runs:
+```text
+<output_dir>/
+├── results.json
+├── parallel_logs/task_NN_<task_name>.log
+└── <task_name>/episode_results.jsonl
+```
+
+No RoboLab release evaluation results are included in this release. Publish RoboLab numbers only after a fresh run from this client. The upstream dashboard can inspect generated RoboLab outputs:
 
 ```bash
 cd third_party/robolab
@@ -116,4 +131,4 @@ cd examples/robolab_env
 uv run pytest tests/ -v
 ```
 
-Full simulator evaluation is manual because it requires Isaac Sim, RoboLab assets, and an NVIDIA GPU.
+Full simulator evaluation is manual because it requires Isaac Sim, RoboLab assets, and GPU memory.
