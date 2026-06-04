@@ -457,6 +457,7 @@ class TestSetupLiberoProConfig:
         """
         # Monkeypatch pathlib.Path.home() so the script writes under tmp_path.
         monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+        monkeypatch.delenv("LIBERO_CONFIG_PATH", raising=False)
 
         config_path = setup_liberopro_config.setup_liberopro_config()
         assert config_path == tmp_path / ".liberopro" / "config.yaml"
@@ -466,3 +467,14 @@ class TestSetupLiberoProConfig:
         assert "benchmark_root:" in text
         assert "bddl_files:" in text
         assert "assets:" in text
+
+    def test_setup_liberopro_config_respects_libero_config_path(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_dir = tmp_path / "custom_liberopro_config"
+        monkeypatch.setenv("LIBERO_CONFIG_PATH", str(config_dir))
+
+        config_path = setup_liberopro_config.setup_liberopro_config()
+
+        assert config_path == config_dir / "config.yaml"
+        assert config_path.exists()

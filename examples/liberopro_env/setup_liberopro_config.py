@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
 
 
@@ -22,7 +23,9 @@ def build_config_text() -> str:
 
 
 def setup_liberopro_config() -> pathlib.Path:
-    config_dir = pathlib.Path.home() / ".liberopro"
+    config_dir = pathlib.Path(
+        os.environ.get("LIBERO_CONFIG_PATH", pathlib.Path.home() / ".liberopro")
+    )
     config_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = config_dir / "config.yaml"

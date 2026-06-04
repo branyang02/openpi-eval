@@ -56,8 +56,8 @@ Click a preview to open the full MP4.
 ## Evaluation Results
 
 Current release success rates from `results.json` outputs are summarized below.
-Detailed charts live in the simulator READMEs.
-RoboLab release results are not included in this release.
+Detailed charts live in the simulator READMEs. LIBERO-Pro and RoboLab release
+results are not included in this release.
 
 <img src="docs/assets/results/release_evaluation_overview.svg" alt="Release evaluation success rate overview" width="900">
 

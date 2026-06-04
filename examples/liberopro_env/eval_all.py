@@ -85,6 +85,11 @@ class Args:
     # are resolved against the user's shell cwd.
     output_dir: Optional[str] = None
 
+    # Keep writing a complete results.json when task subprocesses fail, but
+    # exit nonzero by default so release evaluations cannot silently publish a
+    # partial run.
+    allow_failures: bool = False
+
 
 def _build_command(
     args: Args,
@@ -188,6 +193,38 @@ def _run_one_task(
     }
 
 
+def _is_nan_success_rate(value: object) -> bool:
+    try:
+        return math.isnan(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _build_task_summary(
+    task_id: int,
+    parsed: Dict[str, object],
+    metadata: Dict[str, str],
+) -> Dict[str, object]:
+    success_rate = parsed["success_rate"]
+    returncode = int(parsed.get("returncode", -1))
+    failed = returncode != 0 or _is_nan_success_rate(success_rate)
+    return {
+        "task_id": task_id,
+        "task_name": metadata["task_name"],
+        "task_description": metadata["task_description"],
+        "success_rate": success_rate,
+        "returncode": returncode,
+        "log_path": str(parsed.get("log_path", "")),
+        "failed": failed,
+    }
+
+
+def _result_sort_key(item: Dict[str, object]) -> tuple[bool, float, int]:
+    success_rate = item["success_rate"]
+    score = float("-inf") if _is_nan_success_rate(success_rate) else float(success_rate)
+    return (not bool(item.get("failed", False)), score, -int(item["task_id"]))
+
+
 def main(args: Args) -> None:
     from main import get_task_suite
 
@@ -274,18 +311,19 @@ def main(args: Args) -> None:
                     "log_path": os.path.join(log_dir, f"task_{task_id:02d}.log"),
                 }
 
-            task_summary = {
-                "task_id": task_id,
-                "task_name": task_metadata[task_id]["task_name"],
-                "task_description": task_metadata[task_id]["task_description"],
-                "success_rate": parsed["success_rate"],
-            }
+            task_summary = _build_task_summary(
+                task_id,
+                parsed,
+                task_metadata[task_id],
+            )
             results.append(task_summary)
             logger.info(
-                "[task_%02d/%s] success_rate=%.2f",
+                "[task_%02d/%s] success_rate=%.2f status=%s log=%s",
                 task_id,
                 task_summary["task_name"],
                 task_summary["success_rate"],
+                "failed" if task_summary["failed"] else "ok",
+                task_summary["log_path"],
             )
 
             # Incremental save so progress isn't lost on early exit. Sort by
@@ -296,13 +334,8 @@ def main(args: Args) -> None:
             with open(results_path, "w") as file_handle:
                 json.dump(results, file_handle, indent=2)
 
-    valid = [
-        item
-        for item in results
-        if not (
-            isinstance(item["success_rate"], float) and math.isnan(item["success_rate"])
-        )
-    ]
+    failed_tasks = [item for item in results if item["failed"]]
+    valid = [item for item in results if not item["failed"]]
     mean_success = (
         float(np.mean([item["success_rate"] for item in valid])) if valid else 0.0
     )
@@ -310,9 +343,8 @@ def main(args: Args) -> None:
     summary = {
         "task_suite_name": args.task_suite_name,
         "mean_success_rate": mean_success,
-        "per_task": sorted(
-            results, key=lambda item: item["success_rate"], reverse=True
-        ),
+        "num_failed_tasks": len(failed_tasks),
+        "per_task": sorted(results, key=_result_sort_key, reverse=True),
     }
     with open(results_path, "w") as file_handle:
         json.dump(summary, file_handle, indent=2)
@@ -327,11 +359,22 @@ def main(args: Args) -> None:
     )
     for task in summary["per_task"]:
         logger.info(
-            "  task_%02d %-35s %.2f",
+            "  task_%02d %-35s %.2f %s",
             task["task_id"],
             task["task_name"],
             task["success_rate"],
+            "FAILED" if task["failed"] else "",
         )
+
+    if failed_tasks and not args.allow_failures:
+        logger.error(
+            "%d task subprocess(es) failed or produced no success_rate. "
+            "See per-task log_path entries in %s. Pass --allow_failures to keep "
+            "a zero exit status for partial/debug runs.",
+            len(failed_tasks),
+            results_path,
+        )
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

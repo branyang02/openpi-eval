@@ -389,6 +389,60 @@ class TestRunOneTask:
         assert "task_05" in r5["log_path"]
 
 
+# --------------------------------------------------------- result summaries
+
+
+class TestResultSummaries:
+    def test_task_summary_marks_nonzero_returncode_as_failed(self) -> None:
+        summary = eval_all._build_task_summary(
+            task_id=2,
+            parsed={
+                "success_rate": 0.0,
+                "returncode": 1,
+                "log_path": "/tmp/task_02.log",
+            },
+            metadata={
+                "task_name": "fake_task",
+                "task_description": "do the fake task",
+            },
+        )
+        assert summary["failed"] is True
+        assert summary["returncode"] == 1
+        assert summary["log_path"] == "/tmp/task_02.log"
+
+    def test_task_summary_marks_missing_success_rate_as_failed(self) -> None:
+        summary = eval_all._build_task_summary(
+            task_id=2,
+            parsed={
+                "success_rate": float("nan"),
+                "returncode": 0,
+                "log_path": "/tmp/task_02.log",
+            },
+            metadata={
+                "task_name": "fake_task",
+                "task_description": "do the fake task",
+            },
+        )
+        assert summary["failed"] is True
+        assert math.isnan(summary["success_rate"])
+
+    def test_task_summary_accepts_zero_success_as_successful_subprocess(self) -> None:
+        summary = eval_all._build_task_summary(
+            task_id=2,
+            parsed={
+                "success_rate": 0.0,
+                "returncode": 0,
+                "log_path": "/tmp/task_02.log",
+            },
+            metadata={
+                "task_name": "fake_task",
+                "task_description": "do the fake task",
+            },
+        )
+        assert summary["failed"] is False
+        assert summary["success_rate"] == 0.0
+
+
 # --------------------------------------------------------- Args dataclass
 
 
@@ -409,4 +463,5 @@ class TestArgsDefaults:
         assert args.num_workers == 10
         assert args.output_dir is None
         assert args.max_steps is None
+        assert args.allow_failures is False
         assert args.render_cameras == ["agentview", "eye_in_hand"]

@@ -21,10 +21,12 @@ the root policy server over WebSocket.
 
 ## Setup
 
+From the repo root:
+
 ```bash
 git submodule update --init --recursive third_party/liberopro
 
-hf download zhouxueyang/LIBERO-Pro \
+uvx --from huggingface_hub hf download zhouxueyang/LIBERO-Pro \
     --repo-type dataset \
     --include "bddl_files/*" \
     --include "init_files/*" \
@@ -40,8 +42,9 @@ uv sync
 uv run python setup_liberopro_config.py
 ```
 
-`setup_liberopro_config.py` writes `~/.liberopro/config.yaml`. `main.py` sets
-`LIBERO_CONFIG_PATH` to that directory by default so it does not collide with
+`setup_liberopro_config.py` writes
+`${LIBERO_CONFIG_PATH:-~/.liberopro}/config.yaml`. `main.py` sets
+`LIBERO_CONFIG_PATH` to `~/.liberopro` by default so it does not collide with
 the regular LIBERO client.
 
 The submodule provides code, while the generated LIBERO-Pro BDDL and init-state
@@ -49,8 +52,9 @@ folders come from the `zhouxueyang/LIBERO-Pro` Hugging Face dataset. Without
 those generated files, perturbed suites such as `libero_goal_task` cannot be
 constructed.
 
-The generated dataset currently ships position (`*_swap`), object
-(`*_object`), semantic-language (`*_lan`), and task (`*_task`) suite folders.
+The supported and tested generated suite families are position (`*_swap`),
+object (`*_object`), semantic-language (`*_lan`), and task (`*_task`). Other
+upstream-registered suites may need additional files or validation.
 
 Use EGL for GPU rendering:
 
