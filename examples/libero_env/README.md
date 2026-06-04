@@ -114,25 +114,6 @@ uv run scripts/benchmark_policy_server_microbatch.py \
     --payload libero --num-clients 64 --requests-per-client 10
 ```
 
-Benchmark the full 64-client LIBERO loop against one server:
-
-```bash
-cd examples/libero_env
-MUJOCO_GL=egl uv run python benchmark_parallel_clients.py \
-    --num_clients 64 --max_workers 64 \
-    --task_suite_name libero_spatial \
-    --max_steps 50 --video_mode none \
-    --output_dir /tmp/libero_e2e_64
-```
-
-`video_mode=none` skips MP4 encoding but still uses MuJoCo-rendered image
-observations for policy inputs. Results are written to `results.json` with
-wall time, environment-step throughput, policy-call throughput, and per-client
-logs.
-If many EGL contexts fail during startup, pin or stagger renderer creation with
-`--render_gpu_device_id`, `--launch_stagger_s`, and
-`--synchronized_start_delay_s`.
-
 ## Evaluate
 
 Run clients from `examples/libero_env`.

@@ -96,7 +96,7 @@ class Args:
     # Progress bars are useful for interactive single-task runs, but noisy when
     # many subprocesses write logs concurrently.
     progress_mode: Literal["auto", "off"] = "auto"
-    # Optional wall-clock barrier used by benchmark_parallel_clients.py after
+    # Optional wall-clock barrier for synchronized subprocess smoke runs after
     # each env has reset to its initial state.
     start_after_unix_s: Optional[float] = None
     # Forwarded to robosuite/MuJoCo. -1 keeps robosuite's default device choice.
