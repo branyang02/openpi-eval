@@ -95,6 +95,16 @@ uv run scripts/serve_policy.py policy:checkpoint \
     --policy.dir=checkpoints/pi0fast-libero-checkpoints/pi0_fast_libero_b200_bs512/2000
 ```
 
+For high-worker `eval_all.py` runs, enable server microbatching so concurrent
+client requests are grouped into larger JAX forwards:
+
+```bash
+uv run scripts/serve_policy.py --max-batch-size 16 --max-batch-wait-ms 5 \
+    policy:checkpoint \
+    --policy.config=pi05_libero \
+    --policy.dir=checkpoints/openpi-libero-9000
+```
+
 ## Evaluate
 
 Run clients from `examples/libero_env`.

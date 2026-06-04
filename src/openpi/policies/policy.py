@@ -17,6 +17,42 @@ from openpi.shared import nnx_utils
 BasePolicy: TypeAlias = _base_policy.BasePolicy
 
 
+def _iter_leaves(tree):
+    if isinstance(tree, dict):
+        for value in tree.values():
+            yield from _iter_leaves(value)
+    else:
+        yield tree
+
+
+def _batch_size(tree: dict) -> int:
+    for leaf in _iter_leaves(tree):
+        shape = getattr(leaf, "shape", None)
+        if shape:
+            return int(shape[0])
+    raise ValueError("Cannot infer batch size from observation without array leaves.")
+
+
+def _slice_batch(tree, index: int):
+    if isinstance(tree, dict):
+        return {key: _slice_batch(value, index) for key, value in tree.items()}
+    return tree[index]
+
+
+def _stack_singles(singles: Sequence[dict]) -> dict:
+    if not singles:
+        raise ValueError("Cannot batch an empty sequence.")
+
+    first = singles[0]
+    output = {}
+    for key, value in first.items():
+        if isinstance(value, dict):
+            output[key] = _stack_singles([single[key] for single in singles])
+        else:
+            output[key] = np.stack([np.asarray(single[key]) for single in singles], axis=0)
+    return output
+
+
 def collate_transformed_singles(singles: list[dict]) -> dict:
     """Stack single-example transformed inputs back into one model batch."""
     out = {}
@@ -85,8 +121,8 @@ class Policy(BasePolicy):
         # Make a copy since transformations may modify the inputs in place.
         inputs = jax.tree.map(lambda x: x, obs)
 
-        eval_batch_size = int(inputs["observation/state"].shape[0])
-        singles = [{key: value[i] for key, value in inputs.items()} for i in range(eval_batch_size)]
+        eval_batch_size = _batch_size(inputs)
+        singles = [_slice_batch(inputs, i) for i in range(eval_batch_size)]
         singles = [self._input_transform(example) for example in singles]
         inputs = collate_transformed_singles(singles)
 
@@ -135,6 +171,21 @@ class Policy(BasePolicy):
             "infer_ms": model_time * 1000,
         }
         return outputs
+
+    def infer_many(self, obs: Sequence[dict], *, noise: np.ndarray | None = None) -> list[dict]:
+        if not obs:
+            return []
+
+        outputs = self.infer_batched(_stack_singles(obs), noise=noise)
+        policy_timing = outputs.pop("policy_timing", None)
+
+        results = []
+        for i in range(len(obs)):
+            result = _slice_batch(outputs, i)
+            if policy_timing is not None:
+                result["policy_timing"] = policy_timing
+            results.append(result)
+        return results
 
     @override
     def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:  # type: ignore[misc]
