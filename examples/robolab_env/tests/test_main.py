@@ -68,6 +68,17 @@ def test_build_runner_argv_forwards_public_args(tmp_path) -> None:
     assert "--enable-subtask" in argv
 
 
+def test_build_runner_argv_defaults_to_example_output_root(tmp_path) -> None:
+    runner = tmp_path / "run.py"
+    args = main.Args(policy="pi05", task=["BananaInBowlTask"])
+
+    argv = main._build_runner_argv(args, runner)
+
+    output_dir = Path(argv[argv.index("--output-folder-name") + 1])
+    assert output_dir.is_absolute()
+    assert output_dir == Path(main.__file__).resolve().parent / "output" / "pi05"
+
+
 def test_build_runner_argv_uses_remote_uri_and_adaptive_sampling(tmp_path) -> None:
     runner = tmp_path / "run.py"
     args = main.Args(
@@ -147,7 +158,7 @@ def test_recorder_patch_hooks_future_import(tmp_path, monkeypatch) -> None:
     ):
         (package / "__init__.py").write_text("")
     (logging_pkg / "recorder_manager.py").write_text(
-        "def _slice_to_envs(value, env_ids):\n" "    return 'unpatched'\n"
+        "def _slice_to_envs(value, env_ids):\n    return 'unpatched'\n"
     )
 
     monkeypatch.syspath_prepend(str(tmp_path))

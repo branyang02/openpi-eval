@@ -14,8 +14,13 @@ Examples:
 Output layout:
     <output_dir>/
     ├── results.json
+    ├── episode_results.jsonl
     ├── parallel_logs/task_NN_<task_name>.log
-    └── <task_name>/episode_results.jsonl
+    └── <task_name>/
+        ├── env_cfg.json
+        ├── log_<run>_env<env>.json
+        ├── run_<run>.hdf5
+        └── *.mp4  # when --video-mode is not none
 """
 
 from __future__ import annotations
@@ -206,28 +211,36 @@ def _build_command(args: Args, task_name: str, output_dir: str) -> List[str]:
     return cmd
 
 
-def _load_episode_results(task_output_dir: str) -> list[dict]:
-    jsonl_path = os.path.join(task_output_dir, "episode_results.jsonl")
-    json_path = os.path.join(task_output_dir, "episode_results.json")
+def _episode_matches_task(episode: dict, task_name: str) -> bool:
+    return episode.get("env_name") == task_name or episode.get("task_name") == task_name
+
+
+def _load_episode_results(output_dir: str, task_name: str | None = None) -> list[dict]:
+    jsonl_path = os.path.join(output_dir, "episode_results.jsonl")
+    json_path = os.path.join(output_dir, "episode_results.json")
+    episodes: list[dict] = []
 
     if os.path.exists(jsonl_path):
-        episodes: list[dict] = []
         with open(jsonl_path) as file_handle:
             for line in file_handle:
                 line = line.strip()
                 if line:
                     episodes.append(json.loads(line))
-        return episodes
 
-    if os.path.exists(json_path):
+    elif os.path.exists(json_path):
         with open(json_path) as file_handle:
             data = json.load(file_handle)
         if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
+            episodes = data
+        elif isinstance(data, dict):
+            episodes = [data]
 
-    return []
+    if task_name is not None:
+        return [
+            episode for episode in episodes if _episode_matches_task(episode, task_name)
+        ]
+
+    return episodes
 
 
 def _summarize_episodes(episodes: list[dict]) -> dict[str, object]:
@@ -249,10 +262,10 @@ def _run_one_task(
     cwd: str,
     output_dir: str,
 ) -> Dict[str, object]:
-    task_output_dir = os.path.join(output_dir, _sanitize_task_name(task_name))
+    task_output_dir = os.path.join(output_dir, task_name)
     os.makedirs(task_output_dir, exist_ok=True)
 
-    cmd = _build_command(args, task_name, task_output_dir)
+    cmd = _build_command(args, task_name, output_dir)
     env = os.environ.copy()
     env.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
 
@@ -268,7 +281,7 @@ def _run_one_task(
             check=False,
         )
 
-    episodes = _load_episode_results(task_output_dir)
+    episodes = _load_episode_results(output_dir, task_name=task_name)
     summary = _summarize_episodes(episodes)
     summary.update(
         {
@@ -277,9 +290,7 @@ def _run_one_task(
             "returncode": proc.returncode,
             "log_path": log_path,
             "output_dir": task_output_dir,
-            "episode_results_path": os.path.join(
-                task_output_dir, "episode_results.jsonl"
-            ),
+            "episode_results_path": os.path.join(output_dir, "episode_results.jsonl"),
         }
     )
     return summary
@@ -369,8 +380,9 @@ def main(args: Args) -> None:
                         log_dir,
                         f"task_{task_idx:02d}_{_sanitize_task_name(task_name)}.log",
                     ),
-                    "output_dir": os.path.join(
-                        output_dir, _sanitize_task_name(task_name)
+                    "output_dir": os.path.join(output_dir, task_name),
+                    "episode_results_path": os.path.join(
+                        output_dir, "episode_results.jsonl"
                     ),
                 }
 

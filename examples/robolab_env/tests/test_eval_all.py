@@ -66,7 +66,7 @@ def test_build_command_forwards_main_args() -> None:
         background_seed=123,
     )
 
-    cmd = eval_all._build_command(args, "BananaInBowlTask", "/tmp/robolab-task")
+    cmd = eval_all._build_command(args, "BananaInBowlTask", "/tmp/robolab-run")
 
     expected_pairs = {
         "--host": "127.0.0.1",
@@ -79,7 +79,7 @@ def test_build_command_forwards_main_args() -> None:
         "--remote-uri": "wss://policy.example",
         "--video-mode": "sensor",
         "--device": "cuda:1",
-        "--output-dir": "/tmp/robolab-task",
+        "--output-dir": "/tmp/robolab-run",
         "--background-seed": "123",
     }
     for flag, value in expected_pairs.items():
@@ -129,9 +129,13 @@ def test_run_one_task_parses_episode_results(tmp_path: pathlib.Path) -> None:
             output_dir = sys.argv[sys.argv.index("--output-dir") + 1]
             task = sys.argv[sys.argv.index("--task") + 1]
             os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(os.path.join(output_dir, task), exist_ok=True)
+            with open(os.path.join(output_dir, task, "env_cfg.json"), "w") as f:
+                f.write("{}")
             with open(os.path.join(output_dir, "episode_results.jsonl"), "w") as f:
                 f.write(json.dumps({"env_name": task, "episode": 0, "success": True}) + "\\n")
                 f.write(json.dumps({"env_name": task, "episode": 1, "success": False}) + "\\n")
+                f.write(json.dumps({"env_name": "OtherTask", "episode": 0, "success": True}) + "\\n")
             """
         )
     )
@@ -155,8 +159,10 @@ def test_run_one_task_parses_episode_results(tmp_path: pathlib.Path) -> None:
     assert result["num_success"] == 1
     assert result["success_rate"] == 0.5
     assert result["returncode"] == 0
+    assert result["output_dir"] == str(output_dir / "BananaInBowlTask")
     assert pathlib.Path(result["log_path"]).exists()
     assert pathlib.Path(result["episode_results_path"]).exists()
+    assert not (output_dir / "BananaInBowlTask" / "BananaInBowlTask").exists()
 
 
 def test_load_episode_results_supports_json_fallback(tmp_path: pathlib.Path) -> None:
@@ -164,6 +170,23 @@ def test_load_episode_results_supports_json_fallback(tmp_path: pathlib.Path) -> 
     (tmp_path / "episode_results.json").write_text(json.dumps(episodes))
 
     assert eval_all._load_episode_results(str(tmp_path)) == episodes
+
+
+def test_load_episode_results_filters_by_task(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "episode_results.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"env_name": "A", "success": True}),
+                json.dumps({"task_name": "A", "success": False}),
+                json.dumps({"env_name": "B", "success": True}),
+            ]
+        )
+    )
+
+    episodes = eval_all._load_episode_results(str(tmp_path), task_name="A")
+
+    assert len(episodes) == 2
+    assert [episode["success"] for episode in episodes] == [True, False]
 
 
 def test_build_final_summary_labels_explicit_task_runs() -> None:

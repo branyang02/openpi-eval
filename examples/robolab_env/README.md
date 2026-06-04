@@ -106,13 +106,18 @@ Increase `--num-envs` before increasing `--num-runs`. Use `--num-episodes-adapti
 
 ## Results
 
-`eval_all.py` writes:
+`main.py` writes `episode_results.jsonl` plus one task directory under the run directory. `eval_all.py` uses the same layout and adds `results.json` plus `parallel_logs/`:
 
 ```text
 <output_dir>/
 ├── results.json
+├── episode_results.jsonl
 ├── parallel_logs/task_NN_<task_name>.log
-└── <task_name>/episode_results.jsonl
+└── <task_name>/
+    ├── env_cfg.json
+    ├── log_<run>_env<env>.json
+    ├── run_<run>.hdf5
+    └── *.mp4  # when --video-mode is not none
 ```
 
 No RoboLab release evaluation results are included in this release. Publish RoboLab numbers only after a fresh run from this client. The upstream dashboard can inspect generated RoboLab outputs:

@@ -62,8 +62,10 @@ class Args:
     # Full WebSocket URI for remote serving. Overrides host/port when set.
     remote_uri: Optional[str] = None
 
-    # Absolute or relative output directory for this run. RoboLab's runner calls
-    # the underlying flag "output-folder-name"; absolute values are honored and
+    # Absolute or relative top-level output directory for this run. If None,
+    # defaults to examples/robolab_env/output/<policy>/, matching the other
+    # simulator clients' example-local output roots. RoboLab's runner calls the
+    # underlying flag "output-folder-name"; absolute values are honored and
     # relative values are resolved from the user's shell cwd.
     output_dir: Optional[str] = None
 
@@ -159,10 +161,14 @@ def _extend_flag(argv: list[str], flag: str, values: list[str]) -> None:
         argv.extend(values)
 
 
-def _resolve_output_folder_name(output_dir: str | None) -> str | None:
-    if output_dir is None:
-        return None
-    return os.path.abspath(output_dir)
+def _default_output_dir(args: Args) -> str:
+    return str(Path(__file__).resolve().parent / "output" / args.policy)
+
+
+def _resolve_output_folder_name(args: Args) -> str:
+    return os.path.abspath(
+        args.output_dir if args.output_dir is not None else _default_output_dir(args)
+    )
 
 
 def _validate_args(args: Args) -> None:
@@ -218,9 +224,7 @@ def _build_runner_argv(args: Args, runner: Path | None = None) -> list[str]:
         argv.extend(["--open-loop-horizon", str(args.open_loop_horizon)])
     if args.num_episodes_adaptive is not None:
         argv.extend(["--num-episodes-adaptive", str(args.num_episodes_adaptive)])
-    output_folder_name = _resolve_output_folder_name(args.output_dir)
-    if output_folder_name is not None:
-        argv.extend(["--output-folder-name", output_folder_name])
+    argv.extend(["--output-folder-name", _resolve_output_folder_name(args)])
     if args.headless:
         argv.append("--headless")
     if args.enable_subtask:
