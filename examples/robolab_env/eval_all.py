@@ -269,6 +269,28 @@ def _summarize_episodes(episodes: list[dict]) -> dict[str, object]:
     }
 
 
+def _expected_min_episodes(args: Args) -> int:
+    if args.num_episodes_adaptive is not None:
+        return args.num_envs
+    return args.num_envs * args.num_runs
+
+
+def _task_failure_reason(
+    args: Args, returncode: int, episodes: list[dict]
+) -> str | None:
+    if returncode != 0:
+        return f"subprocess exited with return code {returncode}"
+
+    expected_min = _expected_min_episodes(args)
+    if len(episodes) < expected_min:
+        return (
+            f"expected at least {expected_min} matching episode result(s), "
+            f"found {len(episodes)}"
+        )
+
+    return None
+
+
 def _run_one_task(
     args: Args,
     task_name: str,
@@ -300,6 +322,7 @@ def _run_one_task(
         output_dir, task_name=task_name, policy=args.policy
     )
     summary = _summarize_episodes(episodes)
+    failure_reason = _task_failure_reason(args, proc.returncode, episodes)
     summary.update(
         {
             "task_name": task_name,
@@ -308,8 +331,11 @@ def _run_one_task(
             "log_path": log_path,
             "output_dir": task_output_dir,
             "episode_results_path": os.path.join(output_dir, "episode_results.jsonl"),
+            "expected_min_episodes": _expected_min_episodes(args),
         }
     )
+    if failure_reason is not None:
+        summary["failure_reason"] = failure_reason
     return summary
 
 
@@ -327,16 +353,22 @@ def _build_final_summary(
     results: list[dict[str, object]],
     mean_success: float,
 ) -> dict[str, object]:
-    per_task = [
-        {
+    per_task = []
+    for item in sorted(results, key=_success_sort_key):
+        task_summary = {
             "task_name": item["task_name"],
             "task_idx": item["task_idx"],
             "num_episodes": item["num_episodes"],
             "num_success": item["num_success"],
             "success_rate": item["success_rate"],
         }
-        for item in sorted(results, key=_success_sort_key)
-    ]
+        failure_reason = item.get("failure_reason")
+        if failure_reason is not None:
+            task_summary["failure_reason"] = failure_reason
+            task_summary["returncode"] = item["returncode"]
+            task_summary["log_path"] = item["log_path"]
+        per_task.append(task_summary)
+
     return {
         "task_set": run_label,
         "requested_task_set": args.task_set,
@@ -407,6 +439,7 @@ def main(args: Args) -> None:
                     "num_success": 0,
                     "success_rate": float("nan"),
                     "returncode": -1,
+                    "failure_reason": str(exc),
                     "log_path": os.path.join(
                         log_dir,
                         f"task_{task_idx:02d}_{_sanitize_task_name(task_name)}.log",
@@ -450,6 +483,17 @@ def main(args: Args) -> None:
 
     logger.info("Results saved to %s", results_path)
     logger.info("Mean success rate: %.2f", mean_success)
+
+    failures = [item for item in results if item.get("failure_reason") is not None]
+    if failures:
+        for item in failures:
+            logger.error(
+                "[%s] failed: %s. See %s",
+                item["task_name"],
+                item["failure_reason"],
+                item["log_path"],
+            )
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

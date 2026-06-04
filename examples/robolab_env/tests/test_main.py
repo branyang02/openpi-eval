@@ -11,82 +11,39 @@ import main
 def test_robolab_runner_path_resolves() -> None:
     repo_root = Path(__file__).resolve().parents[3]
 
-    runner = main._robolab_runner(repo_root)
+    root = main._robolab_root(repo_root)
 
-    assert (
-        runner
-        == repo_root / "third_party" / "robolab" / "policies" / "pi0_family" / "run.py"
-    )
+    assert root == repo_root / "third_party" / "robolab"
 
 
-def test_build_runner_argv_forwards_public_args(tmp_path) -> None:
-    runner = tmp_path / "run.py"
+def test_client_kwargs_forwards_public_server_args() -> None:
     args = main.Args(
         host="127.0.0.1",
         port=9001,
         policy="pi0_fast",
-        task=["BananaInBowlTask", "OneBottleInSquarePailTask"],
-        task_dirs=["benchmark", "custom_tasks"],
-        num_envs=4,
-        num_runs=2,
         open_loop_horizon=10,
-        output_dir="relative-output",
-        video_mode="none",
-        enable_subtask=True,
-        device="cuda:1",
     )
 
-    argv = main._build_runner_argv(args, runner)
-
-    expected_pairs = {
-        "--policy": "pi0_fast",
-        "--remote-host": "127.0.0.1",
-        "--remote-port": "9001",
-        "--num-envs": "4",
-        "--num-runs": "2",
-        "--open-loop-horizon": "10",
-        "--video-mode": "none",
-        "--device": "cuda:1",
+    assert main._client_kwargs(args) == {
+        "remote_host": "127.0.0.1",
+        "remote_port": 9001,
+        "open_loop_horizon": 10,
+        "policy_variant": "pi0_fast",
     }
-    for flag, value in expected_pairs.items():
-        assert flag in argv
-        assert argv[argv.index(flag) + 1] == value
-
-    assert argv[0] == str(runner)
-    assert argv.count("--task") == 1
-    assert argv[argv.index("--task") + 1 : argv.index("--task") + 3] == [
-        "BananaInBowlTask",
-        "OneBottleInSquarePailTask",
-    ]
-    assert argv.count("--task-dirs") == 1
-    assert argv[argv.index("--task-dirs") + 1 : argv.index("--task-dirs") + 3] == [
-        "benchmark",
-        "custom_tasks",
-    ]
-    assert "--output-folder-name" in argv
-    assert Path(argv[argv.index("--output-folder-name") + 1]).is_absolute()
-    assert "--headless" in argv
-    assert "--enable-subtask" in argv
 
 
-def test_build_runner_argv_defaults_to_example_output_root(tmp_path) -> None:
-    runner = tmp_path / "run.py"
+def test_default_output_root() -> None:
     args = main.Args(policy="pi05", task=["BananaInBowlTask"])
 
-    argv = main._build_runner_argv(args, runner)
+    output_dir = Path(main._resolve_output_folder_name(args))
 
-    output_dir = Path(argv[argv.index("--output-folder-name") + 1])
     assert output_dir.is_absolute()
     assert output_dir == Path(main.__file__).resolve().parent / "output" / "pi05"
 
 
 def test_run_robolab_rejects_output_dir_with_other_policy_results(tmp_path) -> None:
     repo_root = tmp_path
-    runner = (
-        repo_root / "third_party" / "robolab" / "policies" / "pi0_family" / "run.py"
-    )
-    runner.parent.mkdir(parents=True)
-    runner.write_text("raise RuntimeError('should not run')\n")
+    (repo_root / "third_party" / "robolab").mkdir(parents=True)
 
     output_dir = tmp_path / "output"
     output_dir.mkdir()
@@ -109,8 +66,7 @@ def test_run_robolab_rejects_output_dir_with_other_policy_results(tmp_path) -> N
         raise AssertionError("expected ValueError")
 
 
-def test_build_runner_argv_uses_remote_uri_and_adaptive_sampling(tmp_path) -> None:
-    runner = tmp_path / "run.py"
+def test_client_kwargs_uses_remote_uri_and_adaptive_sampling() -> None:
     args = main.Args(
         task=["BananaInBowlTask"],
         remote_uri="wss://example.test/policy",
@@ -118,21 +74,15 @@ def test_build_runner_argv_uses_remote_uri_and_adaptive_sampling(tmp_path) -> No
         ci_pp_width=0.2,
     )
 
-    argv = main._build_runner_argv(args, runner)
-
-    assert "--remote-uri" in argv
-    assert argv[argv.index("--remote-uri") + 1] == "wss://example.test/policy"
-    assert "--num-episodes-adaptive" in argv
-    assert argv[argv.index("--num-episodes-adaptive") + 1] == "25"
-    assert argv[argv.index("--ci-pp-width") + 1] == "0.2"
+    assert main._client_kwargs(args)["remote_uri"] == "wss://example.test/policy"
+    assert main._total_episodes(args) == 25
 
 
-def test_build_runner_argv_requires_task_or_tag(tmp_path) -> None:
-    runner = tmp_path / "run.py"
+def test_validate_args_requires_task_or_tag() -> None:
     args = main.Args(task=[], tag=[])
 
     try:
-        main._build_runner_argv(args, runner)
+        main._validate_args(args)
     except ValueError as exc:
         assert "task or --tag" in str(exc)
     else:
@@ -141,31 +91,36 @@ def test_build_runner_argv_requires_task_or_tag(tmp_path) -> None:
 
 def test_run_robolab_restores_sys_state(tmp_path, monkeypatch) -> None:
     repo_root = tmp_path
-    runner = (
-        repo_root / "third_party" / "robolab" / "policies" / "pi0_family" / "run.py"
-    )
-    runner.parent.mkdir(parents=True)
-    runner.write_text("print('fake runner')\n")
+    robolab_root = repo_root / "third_party" / "robolab"
+    robolab_root.mkdir(parents=True)
 
-    captured = {}
+    captured: dict[str, object] = {}
 
-    def fake_run_path(path, run_name):  # noqa: ANN001
-        captured["path"] = path
-        captured["run_name"] = run_name
-        captured["argv"] = list(sys.argv)
+    class FakeApp:
+        def close(self) -> None:
+            captured["closed"] = True
+
+    def fake_launch(args):  # noqa: ANN001
+        captured["launch_args"] = args
+        return FakeApp()
+
+    def fake_run_task_set(args):  # noqa: ANN001
+        captured["run_args"] = args
         captured["sys_path"] = list(sys.path)
 
-    original_argv = list(sys.argv)
     original_sys_path = list(sys.path)
-    monkeypatch.setattr(main.runpy, "run_path", fake_run_path)
+    monkeypatch.setattr(main, "_launch_simulation_app", fake_launch)
+    monkeypatch.setattr(main, "_configure_robolab_runtime", lambda args: None)
+    monkeypatch.setattr(main, "_register_task_envs", lambda args: None)
+    monkeypatch.setattr(main, "_run_task_set", fake_run_task_set)
 
-    main.run_robolab(main.Args(task=["BananaInBowlTask"]), repo_root=repo_root)
+    args = main.Args(task=["BananaInBowlTask"])
+    main.run_robolab(args, repo_root=repo_root)
 
-    assert captured["path"] == str(runner)
-    assert captured["run_name"] == "__main__"
-    assert captured["argv"][0] == str(runner)
-    assert str(repo_root / "third_party" / "robolab") in captured["sys_path"]
-    assert sys.argv == original_argv
+    assert captured["launch_args"] is args
+    assert captured["run_args"] is args
+    assert captured["closed"] is True
+    assert str(robolab_root) in captured["sys_path"]
     assert sys.path == original_sys_path
 
 

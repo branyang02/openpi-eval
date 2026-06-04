@@ -5,6 +5,8 @@ import math
 import pathlib
 import textwrap
 
+import pytest
+
 import eval_all
 
 
@@ -172,10 +174,38 @@ def test_run_one_task_parses_episode_results(tmp_path: pathlib.Path) -> None:
     assert result["num_success"] == 1
     assert result["success_rate"] == 0.5
     assert result["returncode"] == 0
+    assert result["expected_min_episodes"] == 2
+    assert "failure_reason" not in result
     assert result["output_dir"] == str(output_dir / "BananaInBowlTask")
     assert pathlib.Path(result["log_path"]).exists()
     assert pathlib.Path(result["episode_results_path"]).exists()
     assert not (output_dir / "BananaInBowlTask" / "BananaInBowlTask").exists()
+
+
+def test_run_one_task_flags_missing_episode_results(tmp_path: pathlib.Path) -> None:
+    fake_main = tmp_path / "main.py"
+    fake_main.write_text("import sys\nsys.exit(0)\n")
+
+    log_dir = tmp_path / "logs"
+    output_dir = tmp_path / "output"
+    log_dir.mkdir()
+    output_dir.mkdir()
+
+    result = eval_all._run_one_task(
+        _default_args(num_envs=2),
+        "BananaInBowlTask",
+        0,
+        str(log_dir),
+        str(tmp_path),
+        str(output_dir),
+    )
+
+    assert result["returncode"] == 0
+    assert result["num_episodes"] == 0
+    assert result["expected_min_episodes"] == 2
+    assert result["failure_reason"] == (
+        "expected at least 2 matching episode result(s), found 0"
+    )
 
 
 def test_load_episode_results_supports_json_fallback(tmp_path: pathlib.Path) -> None:
@@ -256,3 +286,70 @@ def test_build_final_summary_labels_explicit_task_runs() -> None:
             "success_rate": 1.0,
         }
     ]
+
+
+def test_build_final_summary_keeps_failure_context() -> None:
+    args = _default_args(tasks=["BananaInBowlTask"])
+
+    summary = eval_all._build_final_summary(
+        args=args,
+        run_label="explicit",
+        task_names=["BananaInBowlTask"],
+        results=[
+            {
+                "task_name": "BananaInBowlTask",
+                "task_idx": 0,
+                "num_episodes": 0,
+                "num_success": 0,
+                "success_rate": float("nan"),
+                "returncode": 0,
+                "failure_reason": "expected at least 1 matching episode result(s), found 0",
+                "log_path": "/tmp/robolab.log",
+                "output_dir": "/tmp/output/BananaInBowlTask",
+            }
+        ],
+        mean_success=0.0,
+    )
+
+    [task_summary] = summary["per_task"]
+    assert task_summary["task_name"] == "BananaInBowlTask"
+    assert task_summary["task_idx"] == 0
+    assert task_summary["num_episodes"] == 0
+    assert task_summary["num_success"] == 0
+    assert math.isnan(task_summary["success_rate"])
+    assert task_summary["failure_reason"] == (
+        "expected at least 1 matching episode result(s), found 0"
+    )
+    assert task_summary["returncode"] == 0
+    assert task_summary["log_path"] == "/tmp/robolab.log"
+
+
+def test_main_exits_nonzero_after_failed_task(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    args = _default_args(tasks=["BananaInBowlTask"], output_dir=str(tmp_path / "out"))
+
+    def fake_run_one_task(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "task_name": "BananaInBowlTask",
+            "task_idx": 0,
+            "num_episodes": 0,
+            "num_success": 0,
+            "success_rate": float("nan"),
+            "returncode": 0,
+            "failure_reason": "expected at least 1 matching episode result(s), found 0",
+            "log_path": str(tmp_path / "task.log"),
+            "output_dir": str(tmp_path / "out" / "BananaInBowlTask"),
+            "episode_results_path": str(tmp_path / "out" / "episode_results.jsonl"),
+        }
+
+    monkeypatch.setattr(eval_all, "_run_one_task", fake_run_one_task)
+
+    with pytest.raises(SystemExit) as exc_info:
+        eval_all.main(args)
+
+    assert exc_info.value.code == 1
+    results = json.loads((tmp_path / "out" / "results.json").read_text())
+    assert results["per_task"][0]["failure_reason"] == (
+        "expected at least 1 matching episode result(s), found 0"
+    )

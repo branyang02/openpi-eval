@@ -6,7 +6,6 @@ import importlib.abc
 import importlib.machinery
 import json
 import os
-import runpy
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -86,10 +85,6 @@ def _robolab_root(repo_root: Path = _REPO_ROOT) -> Path:
     return repo_root / "third_party" / "robolab"
 
 
-def _robolab_runner(repo_root: Path = _REPO_ROOT) -> Path:
-    return _robolab_root(repo_root) / "policies" / "pi0_family" / "run.py"
-
-
 def _slice_uint16_tensor(value: torch.Tensor, env_ids):
     if isinstance(env_ids, torch.Tensor):
         env_ids = env_ids.detach().cpu().numpy()
@@ -154,12 +149,6 @@ def _install_recorder_uint16_patch() -> None:
 
     if not any(isinstance(finder, _RecorderPatchFinder) for finder in sys.meta_path):
         sys.meta_path.insert(0, _RecorderPatchFinder())
-
-
-def _extend_flag(argv: list[str], flag: str, values: list[str]) -> None:
-    if values:
-        argv.append(flag)
-        argv.extend(values)
 
 
 def _default_output_dir(args: Args) -> str:
@@ -227,72 +216,6 @@ def _validate_args(args: Args) -> None:
         raise ValueError("Provide at least one --task or --tag.")
 
 
-def _build_runner_argv(args: Args, runner: Path | None = None) -> list[str]:
-    """Translate this example's typed Args into RoboLab's argparse runner CLI."""
-    _validate_args(args)
-    runner = runner or _robolab_runner()
-
-    argv = [
-        str(runner),
-        "--policy",
-        args.policy,
-        "--remote-host",
-        args.host,
-        "--remote-port",
-        str(args.port),
-        "--num-envs",
-        str(args.num_envs),
-        "--num-runs",
-        str(args.num_runs),
-        "--ci-pp-width",
-        str(args.ci_pp_width),
-        "--instruction-type",
-        args.instruction_type,
-        "--video-mode",
-        args.video_mode,
-        "--device",
-        args.device,
-    ]
-
-    _extend_flag(argv, "--task", list(args.task))
-    _extend_flag(argv, "--tag", list(args.tag))
-    _extend_flag(argv, "--task-dirs", list(args.task_dirs))
-
-    if args.remote_uri is not None:
-        argv.extend(["--remote-uri", args.remote_uri])
-    if args.open_loop_horizon is not None:
-        argv.extend(["--open-loop-horizon", str(args.open_loop_horizon)])
-    if args.num_episodes_adaptive is not None:
-        argv.extend(["--num-episodes-adaptive", str(args.num_episodes_adaptive)])
-    argv.extend(["--output-folder-name", _resolve_output_folder_name(args)])
-    if args.headless:
-        argv.append("--headless")
-    if args.enable_subtask:
-        argv.append("--enable-subtask")
-    if args.enable_verbose:
-        argv.append("--enable-verbose")
-    if args.enable_debug:
-        argv.append("--enable-debug")
-    if args.record_image_data:
-        argv.append("--record-image-data")
-    if args.randomize_background:
-        argv.append("--randomize-background")
-    if args.background_seed is not None:
-        argv.extend(["--background-seed", str(args.background_seed)])
-
-    return argv
-
-
-@contextlib.contextmanager
-def _temporary_argv(argv: list[str]) -> Iterator[None]:
-    original = sys.argv[:]
-    sys.argv = list(argv)
-    try:
-        yield
-    finally:
-        sys.argv = original
-
-
 @contextlib.contextmanager
 def _temporary_sys_path(path: Path) -> Iterator[None]:
     path_str = str(path)
@@ -307,20 +230,244 @@ def _temporary_sys_path(path: Path) -> Iterator[None]:
                 sys.path.remove(path_str)
 
 
+def _launch_simulation_app(args: Args):
+    import cv2  # noqa: F401 -- must import this before isaaclab.
+    from isaaclab.app import AppLauncher
+
+    launcher = AppLauncher(
+        {
+            "headless": args.headless,
+            "enable_cameras": True,
+            "device": args.device,
+        }
+    )
+    return launcher.app
+
+
+def _configure_robolab_runtime(args: Args) -> None:
+    import robolab.constants
+
+    robolab.constants.ENABLE_SUBTASK_PROGRESS_CHECKING = args.enable_subtask
+    robolab.constants.RECORD_IMAGE_DATA = args.record_image_data
+    robolab.constants.VERBOSE = args.enable_verbose
+    robolab.constants.DEBUG = args.enable_debug
+
+
+def _register_task_envs(args: Args) -> None:
+    from robolab.registrations.droid.auto_env_registrations_jointpos import (
+        auto_register_droid_envs,
+    )
+
+    auto_register_droid_envs(
+        task_dirs=args.task_dirs,
+        task=args.task,
+        randomize_background=args.randomize_background,
+        background_seed=args.background_seed,
+    )
+
+
+def _client_kwargs(args: Args) -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "remote_host": args.host,
+        "remote_port": args.port,
+        "remote_uri": args.remote_uri,
+        "open_loop_horizon": args.open_loop_horizon,
+        "policy_variant": args.policy,
+    }
+    return {key: value for key, value in kwargs.items() if value is not None}
+
+
+def make_client(args: Args):
+    from policies.pi0_family.client import Pi0DroidJointposClient
+
+    return Pi0DroidJointposClient(**_client_kwargs(args))
+
+
+def _resolve_task_envs(args: Args) -> tuple[list[str], str]:
+    from robolab.core.environments.factory import get_envs
+
+    if args.task:
+        task_envs = get_envs(task=args.task)
+        filter_str = f"tasks: {', '.join(args.task)}"
+    elif args.tag:
+        task_envs = get_envs(tag=args.tag)
+        filter_str = f"tags: {', '.join(args.tag)}"
+    else:
+        task_envs = get_envs()
+        filter_str = "all"
+
+    return task_envs, filter_str
+
+
+def _total_episodes(args: Args) -> int:
+    return (
+        args.num_episodes_adaptive
+        if args.num_episodes_adaptive is not None
+        else args.num_runs * args.num_envs
+    )
+
+
+def _run_task_set(args: Args) -> None:
+    import robolab.constants
+    from robolab.constants import set_output_dir
+    from robolab.core.environments.runtime import create_env
+    from robolab.core.logging.results import (
+        check_all_episodes_complete,
+        check_run_complete,
+        init_experiment,
+        summarize_experiment_results,
+    )
+    from robolab.core.utils.adaptive_sampling import (
+        count_task_episodes,
+        should_continue_sampling,
+    )
+    from robolab.core.utils.print_utils import print_experiment_summary
+    from robolab.eval.episode import run_episode
+    from robolab.eval.summarize import summarize_run
+
+    output_dir = _resolve_output_folder_name(args)
+    os.makedirs(output_dir, exist_ok=True)
+
+    task_envs, filter_str = _resolve_task_envs(args)
+    total_episodes = _total_episodes(args)
+    adaptive_max = args.num_episodes_adaptive
+    is_adaptive = adaptive_max is not None
+
+    print_experiment_summary(
+        task_envs=task_envs,
+        filter_str=filter_str,
+        num_envs=args.num_envs,
+        num_episodes=total_episodes,
+        policy=args.policy,
+        instruction_type=args.instruction_type,
+        output_dir=output_dir,
+    )
+
+    episode_results_file, episode_results = init_experiment(output_dir)
+    save_videos = args.video_mode != "none"
+
+    for task_env in task_envs:
+        scene_output_dir = os.path.join(output_dir, task_env)
+        os.makedirs(scene_output_dir, exist_ok=True)
+        set_output_dir(scene_output_dir)
+
+        if check_all_episodes_complete(
+            episode_results=episode_results,
+            env_name=task_env,
+            num_episodes=total_episodes,
+        ):
+            print(f"\033[96m[RoboLab] Task `{task_env}` already done. Skipping.\033[0m")
+            continue
+
+        env, env_cfg = create_env(
+            task_env,
+            device=args.device,
+            num_envs=args.num_envs,
+            instruction_type=args.instruction_type,
+            policy=args.policy,
+        )
+        client = make_client(args)
+
+        try:
+            run_idx = 0
+            while True:
+                if is_adaptive:
+                    k_so_far, n_so_far = count_task_episodes(episode_results, task_env)
+                    if not should_continue_sampling(
+                        k=k_so_far,
+                        n=n_so_far,
+                        target_width=args.ci_pp_width,
+                        n_max=adaptive_max,
+                    ):
+                        print(
+                            f"\033[96m[RoboLab] Task `{task_env}` adaptive stop at {n_so_far} "
+                            f"episodes ({k_so_far}/{n_so_far} success).\033[0m"
+                        )
+                        break
+                elif run_idx >= args.num_runs:
+                    break
+
+                run_episode_ids = [
+                    run_idx * args.num_envs + eid for eid in range(args.num_envs)
+                ]
+                if all(
+                    check_run_complete(
+                        episode_results=episode_results,
+                        env_name=task_env,
+                        episode=ep_id,
+                    )
+                    for ep_id in run_episode_ids
+                ):
+                    print(
+                        f"\033[96m[RoboLab] Task `{task_env}` run `{run_idx}` already done. Skipping.\033[0m"
+                    )
+                    run_idx += 1
+                    continue
+
+                if args.instruction_type != "default":
+                    run_name = f"{task_env}_{args.instruction_type}_{run_idx}"
+                else:
+                    run_name = f"{task_env}_{run_idx}"
+                print(
+                    f"\033[96m[RoboLab] Running {run_name}: '{env_cfg.instruction}' "
+                    f"(run {run_idx}, {args.num_envs} envs)\033[0m"
+                )
+
+                env_results, msgs, timing = run_episode(
+                    env=env,
+                    env_cfg=env_cfg,
+                    episode=run_idx,
+                    client=client,
+                    save_videos=save_videos,
+                    video_mode=args.video_mode,
+                    headless=args.headless,
+                )
+
+                episode_results = summarize_run(
+                    env_results=env_results,
+                    msgs=msgs,
+                    env=env,
+                    env_cfg=env_cfg,
+                    num_envs=args.num_envs,
+                    run_idx=run_idx,
+                    run_name=run_name,
+                    task_env=task_env,
+                    scene_output_dir=scene_output_dir,
+                    policy=args.policy,
+                    episode_results=episode_results,
+                    episode_results_file=episode_results_file,
+                    enable_subtask_progress=robolab.constants.ENABLE_SUBTASK_PROGRESS_CHECKING,
+                    timing=timing,
+                    instruction_type=args.instruction_type,
+                )
+
+                env.reset_eval_state()
+                run_idx += 1
+        finally:
+            env.close()
+
+    summarize_experiment_results(episode_results, show_timing=True)
+
+
 def run_robolab(args: Args, repo_root: Path = _REPO_ROOT) -> None:
     robolab_root = _robolab_root(repo_root)
-    runner = _robolab_runner(repo_root)
-    if not runner.exists():
+    if not robolab_root.exists():
         raise SystemExit(
             "RoboLab submodule is missing. Run: "
             "git submodule update --init --recursive third_party/robolab"
         )
 
+    _validate_args(args)
     _ensure_output_dir_policy_compatible(_resolve_output_folder_name(args), args.policy)
-    argv = _build_runner_argv(args, runner)
     _install_recorder_uint16_patch()
-    with _temporary_sys_path(robolab_root), _temporary_argv(argv):
-        runpy.run_path(str(runner), run_name="__main__")
+    with _temporary_sys_path(robolab_root):
+        simulation_app = _launch_simulation_app(args)
+        try:
+            _configure_robolab_runtime(args)
+            _register_task_envs(args)
+            _run_task_set(args)
+        finally:
+            simulation_app.close()
 
 
 def main(args: Args) -> None:
