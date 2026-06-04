@@ -26,7 +26,7 @@ From the repo root:
 ```bash
 git submodule update --init --recursive third_party/liberopro
 
-uvx --from huggingface_hub hf download zhouxueyang/LIBERO-Pro \
+hf download zhouxueyang/LIBERO-Pro \
     --repo-type dataset \
     --include "bddl_files/*" \
     --include "init_files/*" \
