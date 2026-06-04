@@ -60,7 +60,7 @@ RoboLab release results are not included in this release.
 | MetaWorld | `pi05_metaworld` checkpoint | Training example only | JAX eval; optional `pi05` PyTorch serving | [MetaWorld](examples/metaworld/README.md) |
 | LIBERO | `pi05_libero` checkpoint | `pi0_fast_libero` checkpoint | JAX eval; optional `pi05` PyTorch serving | [LIBERO](examples/libero_env/README.md) |
 | RoboCasa | `pi05_robocasa` checkpoint | config only | JAX eval; `pi0_fast` checkpoint not included in this release | [RoboCasa](examples/robocasa_env/README.md) |
-| RoboLab | `pi05_droid_jointpos` checkpoint | config only | JAX eval through latest RoboLab Pi0-family runner; release results not included | [RoboLab](examples/robolab_env/README.md) |
+| RoboLab | `pi05_droid_jointpos` checkpoint | `pi0_fast_droid_jointpos` checkpoint | JAX eval through latest RoboLab Pi0-family runner; release results not included | [RoboLab](examples/robolab_env/README.md) |
 
 Checkpoint download commands, training examples, evaluation commands, and
 environment-specific troubleshooting live in the linked guides.
