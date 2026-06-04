@@ -1,6 +1,5 @@
 import abc
-from collections.abc import Sequence
-from typing import Dict
+from typing import Dict, List, Sequence
 
 
 class BasePolicy(abc.ABC):
@@ -8,7 +7,7 @@ class BasePolicy(abc.ABC):
     def infer(self, obs: Dict) -> Dict:
         """Infer actions from observations."""
 
-    def infer_many(self, obs: Sequence[Dict]) -> list[Dict]:
+    def infer_many(self, obs: Sequence[Dict]) -> List[Dict]:
         """Infer actions from multiple observations.
 
         Implementations may override this with a true batched forward pass. The
