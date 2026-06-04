@@ -96,12 +96,16 @@ uv run scripts/serve_policy.py policy:checkpoint \
 ```
 
 For high-worker `eval_all.py` runs, enable server microbatching so concurrent
-client requests are grouped into larger JAX forwards:
+client requests are grouped into larger JAX forwards. See
+[`WebsocketPolicyServer`](../../src/openpi/serving/websocket_policy_server.py)
+for flag behavior and tuning notes.
 
 ```bash
 uv run scripts/serve_policy.py \
-    --max-batch-size 16 --min-batch-size 4 --max-batch-wait-ms 5 \
+    --max-batch-size 16 --min-batch-size 2 --max-batch-wait-ms 5 \
     --pad-to-batch-bucket \
+    --warmup-batch-buckets \
+    --bucket-aware-batching \
     policy:checkpoint \
     --policy.config=pi05_libero \
     --policy.dir=checkpoints/openpi-libero-9000

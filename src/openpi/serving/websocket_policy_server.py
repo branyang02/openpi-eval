@@ -1,3 +1,49 @@
+"""WebSocket policy serving with optional server-side microbatching.
+
+Clients always use the same request path (`WebsocketClientPolicy.infer(obs)`).
+When `max_batch_size == 1`, each request is evaluated immediately. When
+`max_batch_size > 1`, request handlers enqueue observations and a background
+worker groups pending requests into one `policy.infer_many(...)` call before
+resolving each original client future with its matching output.
+
+Batching flags:
+- `max_batch_size`: maximum number of queued client requests in one model call.
+- `min_batch_size`: preferred minimum batch size before dispatch when the model
+  is ready. The worker still dispatches a smaller partial batch after the wait
+  timeout.
+- `max_batch_wait_ms`: maximum latency budget for collecting more requests.
+- `pad_to_batch_bucket`: pads multi-request batches to power-of-two bucket
+  shapes such as 2, 4, 8, 16, 32. Padding duplicates the last real request and
+  extra outputs are discarded. This trades some extra compute for fewer JAX
+  batch shapes and fewer surprise recompiles.
+- `warmup_batch_buckets`: on the first observed request shape, runs warmup
+  inference for bucket sizes up to `max_batch_size`. This is useful for long JAX
+  evals because compile cost is paid up front, but it can be net slower for
+  short smoke tests.
+- `bucket_aware_batching`: with bucket padding enabled, waits up to
+  `max_batch_wait_ms` to fill the current bucket with real requests before
+  dispatching. For example, 30 queued requests can briefly wait for 2 more
+  requests instead of immediately dispatching a padded batch of 32.
+
+For high-worker LIBERO/RoboCasa `eval_all.py` runs, a typical long-eval server
+configuration is:
+
+    uv run scripts/serve_policy.py \
+        --max-batch-size 16 \
+        --min-batch-size 2 \
+        --max-batch-wait-ms 5 \
+        --pad-to-batch-bucket \
+        --warmup-batch-buckets \
+        --bucket-aware-batching \
+        policy:checkpoint \
+        --policy.config=pi05_libero \
+        --policy.dir=/path/to/checkpoint
+
+Tune `max_batch_size` to expected client concurrency and available GPU memory.
+Omit `warmup_batch_buckets` for small/quick evals where the one-time compile
+warmup cost would dominate.
+"""
+
 import asyncio
 import contextlib
 import dataclasses
