@@ -37,6 +37,9 @@ Registered configs:
 - `pi0_fast_droid_jointpos`
 
 `pi05_droid_jointpos` is the default example config for the commands below.
+`pi0_fast_droid_jointpos` uses the same runner and is smoke-tested with the
+released DROID pi0_fast checkpoint; this is not a RoboLab release evaluation
+result.
 
 ## Serve
 
@@ -49,6 +52,15 @@ uv run scripts/serve_policy.py policy:checkpoint \
     --policy.dir=gs://openpi-assets-simeval/pi05_droid_jointpos
 ```
 
+For the DROID pi0_fast checkpoint:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
+uv run scripts/serve_policy.py policy:checkpoint \
+    --policy.config=pi0_fast_droid_jointpos \
+    --policy.dir=gs://openpi-assets-simeval/pi0_fast_droid_jointpos
+```
+
 ## Evaluate
 
 Run clients from `examples/robolab_env`.
@@ -57,6 +69,14 @@ Run clients from `examples/robolab_env`.
 CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
 uv run python main.py --policy pi05 --headless \
     --task BananaInBowlTask --num-envs 10 --num-runs 1 --enable-subtask
+```
+
+Use the matching client variant when serving pi0_fast:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 OMNI_KIT_ACCEPT_EULA=YES \
+uv run python main.py --policy pi0_fast --headless \
+    --task BananaInBowlTask --num-envs 1 --num-runs 1 --enable-subtask
 ```
 
 RoboLab vectorizes episodes inside one Isaac Sim process:
