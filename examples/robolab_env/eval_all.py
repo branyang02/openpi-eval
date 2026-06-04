@@ -40,7 +40,7 @@ from typing import Dict, List, Optional
 
 import tyro
 
-from main import PolicyVariant, VideoMode
+from main import PolicyVariant, VideoMode, _ensure_output_dir_policy_compatible
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class Args:
     remote_uri: Optional[str] = None
 
     instruction_type: str = "default"
-    video_mode: VideoMode = "none"
+    video_mode: VideoMode = "all"
     headless: bool = True
     device: str = "cuda:0"
     enable_subtask: bool = False
@@ -211,11 +211,19 @@ def _build_command(args: Args, task_name: str, output_dir: str) -> List[str]:
     return cmd
 
 
-def _episode_matches_task(episode: dict, task_name: str) -> bool:
+def _episode_matches_task(
+    episode: dict, task_name: str, policy: str | None = None
+) -> bool:
+    if policy is not None and episode.get("policy") not in (None, policy):
+        return False
     return episode.get("env_name") == task_name or episode.get("task_name") == task_name
 
 
-def _load_episode_results(output_dir: str, task_name: str | None = None) -> list[dict]:
+def _load_episode_results(
+    output_dir: str,
+    task_name: str | None = None,
+    policy: str | None = None,
+) -> list[dict]:
     jsonl_path = os.path.join(output_dir, "episode_results.jsonl")
     json_path = os.path.join(output_dir, "episode_results.json")
     episodes: list[dict] = []
@@ -237,7 +245,14 @@ def _load_episode_results(output_dir: str, task_name: str | None = None) -> list
 
     if task_name is not None:
         return [
-            episode for episode in episodes if _episode_matches_task(episode, task_name)
+            episode
+            for episode in episodes
+            if _episode_matches_task(episode, task_name, policy=policy)
+        ]
+
+    if policy is not None:
+        return [
+            episode for episode in episodes if episode.get("policy") in (None, policy)
         ]
 
     return episodes
@@ -281,7 +296,9 @@ def _run_one_task(
             check=False,
         )
 
-    episodes = _load_episode_results(output_dir, task_name=task_name)
+    episodes = _load_episode_results(
+        output_dir, task_name=task_name, policy=args.policy
+    )
     summary = _summarize_episodes(episodes)
     summary.update(
         {
@@ -310,6 +327,16 @@ def _build_final_summary(
     results: list[dict[str, object]],
     mean_success: float,
 ) -> dict[str, object]:
+    per_task = [
+        {
+            "task_name": item["task_name"],
+            "task_idx": item["task_idx"],
+            "num_episodes": item["num_episodes"],
+            "num_success": item["num_success"],
+            "success_rate": item["success_rate"],
+        }
+        for item in sorted(results, key=_success_sort_key)
+    ]
     return {
         "task_set": run_label,
         "requested_task_set": args.task_set,
@@ -318,8 +345,14 @@ def _build_final_summary(
         "num_envs": args.num_envs,
         "num_runs": args.num_runs,
         "mean_success_rate": mean_success,
-        "per_task": sorted(results, key=_success_sort_key),
+        "per_task": per_task,
     }
+
+
+def _resolve_output_dir(args: Args, script_dir: str) -> str:
+    if args.output_dir is not None:
+        return os.path.abspath(args.output_dir)
+    return os.path.join(script_dir, "output", f"{args.policy}-{_run_label(args)}")
 
 
 def main(args: Args) -> None:
@@ -327,10 +360,8 @@ def main(args: Args) -> None:
     task_names = _resolve_tasks(args)
     run_label = _run_label(args)
 
-    if args.output_dir is not None:
-        output_dir = os.path.abspath(args.output_dir)
-    else:
-        output_dir = os.path.join(script_dir, "output", run_label)
+    output_dir = _resolve_output_dir(args, script_dir)
+    _ensure_output_dir_policy_compatible(output_dir, args.policy)
     os.makedirs(output_dir, exist_ok=True)
 
     log_dir = os.path.join(output_dir, "parallel_logs")

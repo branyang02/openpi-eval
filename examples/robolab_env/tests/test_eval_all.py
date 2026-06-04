@@ -30,6 +30,18 @@ def test_run_label_marks_explicit_task_lists() -> None:
     assert eval_all._run_label(_default_args(tasks=["BananaInBowlTask"])) == "explicit"
 
 
+def test_default_video_mode_matches_main() -> None:
+    assert eval_all.Args().video_mode == "all"
+
+
+def test_default_output_dir_includes_policy() -> None:
+    args = _default_args(policy="pi0_fast", tasks=["BananaInBowlTask"])
+
+    output_dir = eval_all._resolve_output_dir(args, "/tmp/robolab-example")
+
+    assert output_dir == "/tmp/robolab-example/output/pi0_fast-explicit"
+
+
 def test_discover_benchmark_tasks_from_ast(tmp_path: pathlib.Path) -> None:
     task_dir = tmp_path / "third_party" / "robolab" / "robolab" / "tasks" / "benchmark"
     task_dir.mkdir(parents=True)
@@ -133,9 +145,10 @@ def test_run_one_task_parses_episode_results(tmp_path: pathlib.Path) -> None:
             with open(os.path.join(output_dir, task, "env_cfg.json"), "w") as f:
                 f.write("{}")
             with open(os.path.join(output_dir, "episode_results.jsonl"), "w") as f:
-                f.write(json.dumps({"env_name": task, "episode": 0, "success": True}) + "\\n")
-                f.write(json.dumps({"env_name": task, "episode": 1, "success": False}) + "\\n")
-                f.write(json.dumps({"env_name": "OtherTask", "episode": 0, "success": True}) + "\\n")
+                f.write(json.dumps({"env_name": task, "policy": "pi05", "episode": 0, "success": True}) + "\\n")
+                f.write(json.dumps({"env_name": task, "policy": "pi05", "episode": 1, "success": False}) + "\\n")
+                f.write(json.dumps({"env_name": task, "policy": "pi0_fast", "episode": 2, "success": True}) + "\\n")
+                f.write(json.dumps({"env_name": "OtherTask", "policy": "pi05", "episode": 0, "success": True}) + "\\n")
             """
         )
     )
@@ -189,6 +202,26 @@ def test_load_episode_results_filters_by_task(tmp_path: pathlib.Path) -> None:
     assert [episode["success"] for episode in episodes] == [True, False]
 
 
+def test_load_episode_results_filters_by_task_and_policy(
+    tmp_path: pathlib.Path,
+) -> None:
+    (tmp_path / "episode_results.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"env_name": "A", "policy": "pi05", "success": True}),
+                json.dumps({"env_name": "A", "policy": "pi0_fast", "success": False}),
+            ]
+        )
+    )
+
+    episodes = eval_all._load_episode_results(
+        str(tmp_path), task_name="A", policy="pi05"
+    )
+
+    assert len(episodes) == 1
+    assert episodes[0]["policy"] == "pi05"
+
+
 def test_build_final_summary_labels_explicit_task_runs() -> None:
     args = _default_args(task_set="all", tasks=["BananaInBowlTask"])
     summary = eval_all._build_final_summary(
@@ -199,7 +232,12 @@ def test_build_final_summary_labels_explicit_task_runs() -> None:
             {
                 "task_name": "BananaInBowlTask",
                 "task_idx": 0,
+                "num_episodes": 1,
+                "num_success": 1,
                 "success_rate": 1.0,
+                "returncode": 0,
+                "log_path": "/tmp/log",
+                "output_dir": "/tmp/output",
             }
         ],
         mean_success=1.0,
@@ -209,3 +247,12 @@ def test_build_final_summary_labels_explicit_task_runs() -> None:
     assert summary["requested_task_set"] == "all"
     assert summary["tasks"] == ["BananaInBowlTask"]
     assert summary["mean_success_rate"] == 1.0
+    assert summary["per_task"] == [
+        {
+            "task_name": "BananaInBowlTask",
+            "task_idx": 0,
+            "num_episodes": 1,
+            "num_success": 1,
+            "success_rate": 1.0,
+        }
+    ]

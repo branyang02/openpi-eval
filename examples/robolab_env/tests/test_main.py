@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 from pathlib import Path
 
@@ -77,6 +78,35 @@ def test_build_runner_argv_defaults_to_example_output_root(tmp_path) -> None:
     output_dir = Path(argv[argv.index("--output-folder-name") + 1])
     assert output_dir.is_absolute()
     assert output_dir == Path(main.__file__).resolve().parent / "output" / "pi05"
+
+
+def test_run_robolab_rejects_output_dir_with_other_policy_results(tmp_path) -> None:
+    repo_root = tmp_path
+    runner = (
+        repo_root / "third_party" / "robolab" / "policies" / "pi0_family" / "run.py"
+    )
+    runner.parent.mkdir(parents=True)
+    runner.write_text("raise RuntimeError('should not run')\n")
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "episode_results.jsonl").write_text(
+        json.dumps({"env_name": "BananaInBowlTask", "policy": "pi05", "success": True})
+        + "\n"
+    )
+
+    try:
+        main.run_robolab(
+            main.Args(
+                policy="pi0_fast", task=["BananaInBowlTask"], output_dir=str(output_dir)
+            ),
+            repo_root=repo_root,
+        )
+    except ValueError as exc:
+        assert "contains RoboLab results from policy" in str(exc)
+        assert "pi05" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_build_runner_argv_uses_remote_uri_and_adaptive_sampling(tmp_path) -> None:

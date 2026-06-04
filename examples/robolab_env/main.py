@@ -4,6 +4,7 @@ import contextlib
 import dataclasses
 import importlib.abc
 import importlib.machinery
+import json
 import os
 import runpy
 import sys
@@ -171,6 +172,45 @@ def _resolve_output_folder_name(args: Args) -> str:
     )
 
 
+def _load_existing_episode_results(output_dir: str) -> list[dict]:
+    jsonl_path = os.path.join(output_dir, "episode_results.jsonl")
+    json_path = os.path.join(output_dir, "episode_results.json")
+
+    if os.path.exists(jsonl_path):
+        episodes: list[dict] = []
+        with open(jsonl_path) as file_handle:
+            for line in file_handle:
+                line = line.strip()
+                if line:
+                    episodes.append(json.loads(line))
+        return episodes
+
+    if os.path.exists(json_path):
+        with open(json_path) as file_handle:
+            data = json.load(file_handle)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+
+    return []
+
+
+def _ensure_output_dir_policy_compatible(output_dir: str, policy: str) -> None:
+    policies = {
+        episode.get("policy")
+        for episode in _load_existing_episode_results(output_dir)
+        if episode.get("policy")
+    }
+    incompatible = sorted(existing for existing in policies if existing != policy)
+    if incompatible:
+        raise ValueError(
+            f"Output directory {output_dir!r} contains RoboLab results from "
+            f"policy {', '.join(incompatible)!r}. Choose a fresh --output-dir "
+            f"or use the matching --policy {next(iter(incompatible))!r}."
+        )
+
+
 def _validate_args(args: Args) -> None:
     if args.num_envs < 1:
         raise ValueError(f"num_envs must be >= 1, got {args.num_envs}")
@@ -276,6 +316,7 @@ def run_robolab(args: Args, repo_root: Path = _REPO_ROOT) -> None:
             "git submodule update --init --recursive third_party/robolab"
         )
 
+    _ensure_output_dir_policy_compatible(_resolve_output_folder_name(args), args.policy)
     argv = _build_runner_argv(args, runner)
     _install_recorder_uint16_patch()
     with _temporary_sys_path(robolab_root), _temporary_argv(argv):

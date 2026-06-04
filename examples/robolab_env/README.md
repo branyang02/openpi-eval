@@ -106,7 +106,7 @@ Increase `--num-envs` before increasing `--num-runs`. Use `--num-episodes-adapti
 
 ## Results
 
-`main.py` writes `episode_results.jsonl` plus one task directory under the run directory. `eval_all.py` uses the same layout and adds `results.json` plus `parallel_logs/`:
+By default, `main.py` writes to `output/<policy>/` and `eval_all.py` writes to `output/<policy>-<task_set>/`. `main.py` writes `episode_results.jsonl` plus one task directory under the run directory. `eval_all.py` uses the same layout and adds `results.json` plus `parallel_logs/`:
 
 ```text
 <output_dir>/
@@ -119,6 +119,8 @@ Increase `--num-envs` before increasing `--num-runs`. Use `--num-episodes-adapti
     ├── run_<run>.hdf5
     └── *.mp4  # when --video-mode is not none
 ```
+
+RoboLab can resume an existing run directory and skip completed episodes. Use a fresh `--output-dir` when you want a clean run. The client refuses to reuse a directory that already contains results from a different policy.
 
 No RoboLab release evaluation results are included in this release. Publish RoboLab numbers only after a fresh run from this client. The upstream dashboard can inspect generated RoboLab outputs:
 
