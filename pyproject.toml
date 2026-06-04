@@ -140,5 +140,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
-markers = ["manual: should be run manually."]
+markers = [
+    "manual: should be run manually.",
+    "slow: expensive integration tests that are excluded from pull-request CI.",
+]
 testpaths = ["src", "scripts", "packages"]

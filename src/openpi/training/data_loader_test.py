@@ -1,4 +1,5 @@
 import jax
+import pytest
 
 from openpi.models import pi0_config
 from openpi.training import config as _config
@@ -60,6 +61,7 @@ def test_with_fake_dataset():
         assert actions.shape == (config.batch_size, config.model.action_horizon, config.model.action_dim)
 
 
+@pytest.mark.slow
 def test_training_matrix_data_configs():
     config_names = [
         "pi05_metaworld",
