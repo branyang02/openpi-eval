@@ -673,6 +673,26 @@ is **`0.04420376801863313`**.
   (`4.2436` vs `4.1327`) and much worse on GT eval (`5.9933` vs `2.3415`). Keep GT rows
   in the mix; source-aware weighting/sampling should be explored from the 1:1 mixed
   checkpoint rather than moving to generated-only.
+- **Duplicated-cache source-ratio sweep (2026-06-08)** Used the new multi-cache path to
+  test simple source weighting by intentionally duplicating cache paths. The 2GT:1Gen
+  artifact
+  `output/pi05_wan_action_expert_gt2_plus_generated1_full_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`
+  trained on `[GT, GT, generated-full]` (`1056` rows) and scored GT held-out
+  `val_model_zero_noise_mse=2.3467092514038086`. Broad generated-full eval at
+  `output/eval_gt2_plus_generated1_full_prefix_generated_full_diverse44_eval2_3_spe2_h4`
+  scored `dataset_action_mse=3.707585881785124`, `smooth_l1=0.49475298556729147`.
+  The 1GT:2Gen artifact
+  `output/pi05_wan_action_expert_gt1_plus_generated2_full_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`
+  trained on `[GT, generated-full, generated-full]` and scored GT held-out
+  `val_model_zero_noise_mse=2.880946159362793`; broad generated-full eval at
+  `output/eval_gt1_plus_generated2_full_prefix_generated_full_diverse44_eval2_3_spe2_h4`
+  scored `dataset_action_mse=4.191538496428278`, `smooth_l1=0.585339906841737`.
+  Interpretation: 2GT:1Gen is the best generated-full checkpoint so far, improving broad
+  generated-full MSE from GT-only `6.3752`, 1:1 mixed `4.1327`, and generated-only
+  `4.2436` down to `3.7076`, while staying essentially tied with 1:1 on GT eval
+  (`2.3467` vs `2.3415`). Oversampling generated rows to 1GT:2Gen hurts both GT and
+  generated eval. Current best source ratio is therefore **2GT:1 generated-full** for
+  this prefix-action-expert setting.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
