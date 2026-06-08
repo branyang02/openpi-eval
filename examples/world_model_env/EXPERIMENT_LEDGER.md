@@ -360,6 +360,20 @@ is **`0.04420376801863313`**.
   the harder ep8 split, and cross-attention + task-CVaR still improves the dim-2 tail.
   Next credible follow-up is a longer continuation/seed check or a heldout-aware
   task-tail schedule on the train8 cache, not more train2-only stage-2 tuning.
+- **Train8 robustness/schedule follow-up (2026-06-08)** Repeated the train8/e600
+  cross-attention fixed-CVaR run at seed110 and tested a heavier scheduled CVaR
+  variant. The fixed `fraction=0.25`, `weight=0.125` seed110 checkpoint
+  `output/pi05_wan_action_expert_train8_spe8_eval44_ep8_spe16_h4_prefixstate_crossattn_taskcvar_f025_w0125_seed110_e600_h512_l6_lr1e4/checkpoint.pt`
+  scored `dataset_action_mse=2.720783080609432`, `smooth_l1=0.2406281105518399`,
+  per-dim `[1.1716545155517557, 1.0993461184822428, 8.567661670578316, 0.04447001782541285]`.
+  The seed109/seed110 fixed-CVaR mean is `~2.68`, comfortably below the train8
+  encoder baseline `2.8034204384094465` and train2 fixed-CVaR control
+  `3.819351467856369`. A scheduled `0 -> 0.5` CVaR warmup over `500` epochs
+  regressed to `dataset_action_mse=3.099631212481596`, `smooth_l1=0.2879106479546694`,
+  per-dim `[2.207681531536074, 1.1245444175933037, 9.02450865041511, 0.04179025038189627]`.
+  Interpretation: the train8 current-prefix signal is seed-robust enough to justify
+  longer runs, but the high-CVaR schedule that looked promising on train2 does not
+  transfer; use fixed mild CVaR as the longer-run baseline.
 - **Pi0.5 timestep-embedding ablation (2026-06-08)** Added
   `--timestep-embedding-style {diffusion,pi05}` to the cached-prefix action
   expert. The default `diffusion` style preserves the previous geometric
