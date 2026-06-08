@@ -486,6 +486,25 @@ is **`0.04420376801863313`**.
   is negative. The generated full cache can be close in pooled Wan prefix space and
   still be action-brittle, so the next fix should target action-head robustness or
   generated-latent quality/conditioning rather than just changing DiT timestep.
+- **GT-future prefix cross-attention decoder ablation (2026-06-08)** Tested whether
+  the plain encoder action head was too brittle to small Wan-prefix perturbations.
+  Artifact:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_crossattn_norm_seed109_e300_h512_l6/metrics.json`.
+  This used the same GT-future prefix train/eval caches and hyperparameters as the
+  original oracle run, except `decoder_arch=context_cross_attention`. Broad held-out
+  GT eval scored `val_model_zero_noise_mse=2.5952887535095215`, worse than the plain
+  encoder's `2.4864377975463867`. Narrow four-row evals with the cross-attention
+  checkpoint:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_generated_smoke` | `0.1842133637968459` | `0.0916446701145051` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_smoke` | `0.7155092835265839` | `0.3397753688932558` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_smoke` | `8.494649018047465` | `1.651319411010427` |
+
+  Interpretation: swapping to cross-attention does not improve generated-latent
+  robustness here; it worsens both broad GT and narrow generated-full scores. Keep the
+  plain encoder decoder as the stronger baseline for this prefix-token action expert.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
