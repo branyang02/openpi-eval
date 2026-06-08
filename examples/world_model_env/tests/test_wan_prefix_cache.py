@@ -10,7 +10,12 @@ import cache_pi05_wan_prefix_tokens as cache_module
 from cache_pi05_wan_prefix_tokens import Args as CacheArgs
 from cache_pi05_wan_prefix_tokens import precompute_pi05_wan_prefix_tokens
 from train_pi05_wan_action_expert import Args as TrainArgs
-from train_pi05_wan_action_expert import _resolve_action_loss_weights, run_train_eval
+from train_pi05_wan_action_expert import (
+    _perturb_prefix_tokens,
+    _resolve_action_loss_weights,
+    _validate_prefix_noise_std,
+    run_train_eval,
+)
 from world_model.pi05_wan_action_expert import FUTURE_LEAKAGE_KEYS, CachedWanPrefixActionDataset
 from world_model.wan_dit_prefix_encoder import (
     DEFAULT_WAN_DIT_LAYERS,
@@ -1100,3 +1105,121 @@ def test_train_pi05_wan_action_expert_records_per_task_action_normalization(tmp_
     assert checkpoint["action_normalization"]["enabled"] is True
     assert checkpoint["action_normalization"]["scope"] == "per_task"
     assert sorted(checkpoint["action_normalization"]["tasks"]) == metrics["action_normalization_tasks"]
+
+
+def test_prefix_noise_std_validation_rejects_negative_and_nonfinite() -> None:
+    assert _validate_prefix_noise_std(0.0) == 0.0
+    assert _validate_prefix_noise_std(0) == 0.0
+    assert _validate_prefix_noise_std(0.5) == 0.5
+
+    for bad in (-1e-6, -1.0, float("inf"), float("-inf"), float("nan")):
+        with pytest.raises(ValueError, match="prefix_noise_std must be a nonnegative finite"):
+            _validate_prefix_noise_std(bad)
+    with pytest.raises(ValueError, match="prefix_noise_std must be a number"):
+        _validate_prefix_noise_std(True)
+
+
+def test_perturb_prefix_tokens_is_noop_at_zero_std_and_deterministic_when_enabled() -> None:
+    prefix_tokens = torch.arange(2 * 3 * 4, dtype=torch.float32).reshape(2, 3, 4)
+
+    unchanged = _perturb_prefix_tokens(prefix_tokens, std=0.0, generator=None)
+    assert unchanged is prefix_tokens
+
+    noisy_a = _perturb_prefix_tokens(prefix_tokens, std=0.1, generator=torch.Generator().manual_seed(123))
+    noisy_b = _perturb_prefix_tokens(prefix_tokens, std=0.1, generator=torch.Generator().manual_seed(123))
+    noisy_other = _perturb_prefix_tokens(prefix_tokens, std=0.1, generator=torch.Generator().manual_seed(456))
+
+    assert noisy_a.shape == prefix_tokens.shape
+    assert torch.allclose(noisy_a, noisy_b)
+    assert not torch.allclose(noisy_a, prefix_tokens)
+    assert not torch.allclose(noisy_a, noisy_other)
+
+
+def test_train_records_prefix_noise_metadata_disabled_by_default(tmp_path) -> None:
+    cache_dir = tmp_path / "cache"
+    output_dir = tmp_path / "train"
+    precompute_pi05_wan_prefix_tokens(_cache_args(cache_dir))
+
+    metrics = run_train_eval(
+        TrainArgs(
+            cache_path=str(cache_dir),
+            output_dir=str(output_dir),
+            epochs=1,
+            batch_size=2,
+            hidden_dim=16,
+            num_layers=1,
+            num_heads=4,
+            sample_steps=2,
+            device="cpu",
+            seed=17,
+        )
+    )
+    checkpoint = torch.load(output_dir / "checkpoint.pt", map_location="cpu", weights_only=False)
+
+    assert metrics["prefix_noise_std"] == 0.0
+    assert metrics["prefix_noise_enabled"] is False
+    assert "prefix_noise_seed" not in metrics
+    assert checkpoint["prefix_noise"] == {"std": 0.0, "enabled": False, "seed": 17 + 2}
+    assert checkpoint["args"]["prefix_noise_std"] == 0.0
+    assert checkpoint["args"]["prefix_noise_seed"] is None
+
+
+def test_train_accepts_and_records_enabled_prefix_noise_without_changing_eval_shape(tmp_path) -> None:
+    cache_dir = tmp_path / "cache"
+    precompute_pi05_wan_prefix_tokens(_cache_args(cache_dir))
+    shared = {
+        "cache_path": str(cache_dir),
+        "epochs": 1,
+        "batch_size": 2,
+        "hidden_dim": 16,
+        "num_layers": 1,
+        "num_heads": 4,
+        "sample_steps": 2,
+        "device": "cpu",
+        "seed": 17,
+    }
+
+    baseline = run_train_eval(TrainArgs(output_dir=str(tmp_path / "baseline"), **shared))
+    noised = run_train_eval(
+        TrainArgs(output_dir=str(tmp_path / "noised"), prefix_noise_std=0.25, prefix_noise_seed=99, **shared)
+    )
+    checkpoint = torch.load(tmp_path / "noised" / "checkpoint.pt", map_location="cpu", weights_only=False)
+
+    assert noised["prefix_noise_std"] == 0.25
+    assert noised["prefix_noise_enabled"] is True
+    assert noised["prefix_noise_seed"] == 99
+    assert checkpoint["prefix_noise"] == {"std": 0.25, "enabled": True, "seed": 99}
+    assert checkpoint["args"]["prefix_noise_std"] == 0.25
+    assert checkpoint["args"]["prefix_noise_seed"] == 99
+
+    # Eval path is structurally unaffected by training-time prefix perturbation.
+    assert noised["num_val"] == baseline["num_val"]
+    assert len(noised["val_model_zero_noise_mse_per_action_dim"]) == len(
+        baseline["val_model_zero_noise_mse_per_action_dim"]
+    )
+    assert noised["val_model_sample_mse"] >= 0.0
+    # Perturbing the prefix during training actually changes optimization.
+    assert noised["train_loss"] != baseline["train_loss"]
+
+
+def test_train_prefix_noise_is_reproducible_across_runs(tmp_path) -> None:
+    cache_dir = tmp_path / "cache"
+    precompute_pi05_wan_prefix_tokens(_cache_args(cache_dir))
+    shared = {
+        "cache_path": str(cache_dir),
+        "epochs": 1,
+        "batch_size": 2,
+        "hidden_dim": 16,
+        "num_layers": 1,
+        "num_heads": 4,
+        "sample_steps": 2,
+        "device": "cpu",
+        "seed": 17,
+        "prefix_noise_std": 0.3,
+    }
+
+    first = run_train_eval(TrainArgs(output_dir=str(tmp_path / "first"), **shared))
+    second = run_train_eval(TrainArgs(output_dir=str(tmp_path / "second"), **shared))
+
+    assert first["train_loss"] == second["train_loss"]
+    assert first["val_model_sample_mse"] == second["val_model_sample_mse"]

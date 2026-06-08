@@ -63,6 +63,8 @@ class Args:
     task_cvar_warmup_epochs: int = 0
     eval_random_samples: int = 0
     eval_random_seed: int = 10_007
+    prefix_noise_std: float = 0.0
+    prefix_noise_seed: int | None = None
     device: str = "auto"
     seed: int = 7
 
@@ -243,6 +245,37 @@ def _resolve_device(device: str) -> torch.device:
 
 def _make_torch_generator(device: torch.device, seed: int) -> torch.Generator:
     return torch.Generator(device=device).manual_seed(seed)
+
+
+def _validate_prefix_noise_std(prefix_noise_std: float) -> float:
+    if isinstance(prefix_noise_std, bool) or not isinstance(prefix_noise_std, (int, float)):
+        raise ValueError(f"prefix_noise_std must be a number, got {prefix_noise_std!r}.")
+    value = float(prefix_noise_std)
+    if not math.isfinite(value) or value < 0.0:
+        raise ValueError(f"prefix_noise_std must be a nonnegative finite float, got {prefix_noise_std!r}.")
+    return value
+
+
+def _perturb_prefix_tokens(
+    prefix_tokens: torch.Tensor,
+    *,
+    std: float,
+    generator: torch.Generator | None,
+) -> torch.Tensor:
+    """Add zero-mean Gaussian noise scaled by ``std`` to prefix tokens (train-time augmentation).
+
+    Returns the input unchanged when ``std`` is non-positive so the default path is a byte-for-byte
+    no-op that consumes no RNG. The optional ``generator`` keeps perturbations reproducible.
+    """
+    if std <= 0.0:
+        return prefix_tokens
+    noise = torch.randn(
+        prefix_tokens.shape,
+        device=prefix_tokens.device,
+        dtype=prefix_tokens.dtype,
+        generator=generator,
+    )
+    return prefix_tokens + std * noise
 
 
 def _row_wan_action_mode(row: Mapping[str, Any], row_path: Path) -> str | None:
@@ -813,6 +846,7 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         warmup_epochs=args.task_cvar_warmup_epochs,
     )
     action_normalization_scope = _normalize_action_normalization_scope(args.action_normalization_scope)
+    prefix_noise_std = _validate_prefix_noise_std(args.prefix_noise_std)
     if _requires_action_normalization(action_loss_weighting) and not args.normalize_actions:
         raise ValueError(
             f"action_loss_weighting={action_loss_weighting!r} requires normalize_actions=True; "
@@ -877,6 +911,8 @@ def run_train_eval(args: Args) -> dict[str, Any]:
     active_action_loss_weights = action_loss_weights if action_loss_weighting != "none" else None
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     flow_generator = _make_torch_generator(device, args.seed + 1)
+    prefix_noise_seed = args.prefix_noise_seed if args.prefix_noise_seed is not None else args.seed + 2
+    prefix_noise_generator = _make_torch_generator(device, prefix_noise_seed) if prefix_noise_std > 0.0 else None
 
     last_train_loss = 0.0
     last_effective_task_cvar_weight = _effective_task_cvar_weight(
@@ -903,9 +939,14 @@ def run_train_eval(args: Args) -> dict[str, Any]:
                 actions = _normalize_actions_by_task(actions, action_norm_by_task, batch["task"])
             elif action_norm_mean is not None and action_norm_std is not None:
                 actions = _normalize_actions(actions, action_norm_mean, action_norm_std)
+            prefix_tokens = _perturb_prefix_tokens(
+                batch["prefix_tokens"],
+                std=prefix_noise_std,
+                generator=prefix_noise_generator,
+            )
             per_sample_loss, loss_numerator, loss_count = flow_matching_loss_per_sample_parts(
                 model,
-                batch["prefix_tokens"],
+                prefix_tokens,
                 batch["state"],
                 actions,
                 batch["action_mask"],
@@ -973,7 +1014,11 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         "timestep_conditioning": args.timestep_conditioning,
         "timestep_embedding_style": model.timestep_embedding_style,
         "decoder_arch": model.decoder_arch,
+        "prefix_noise_std": prefix_noise_std,
+        "prefix_noise_enabled": prefix_noise_std > 0.0,
     }
+    if prefix_noise_std > 0.0:
+        metrics["prefix_noise_seed"] = prefix_noise_seed
     if wan_action_mode is not None:
         metrics["wan_action_mode"] = wan_action_mode
     if args.normalize_actions and action_norm_mean is not None and action_norm_std is not None:
@@ -1053,6 +1098,11 @@ def run_train_eval(args: Args) -> dict[str, Any]:
             "task_cvar_warmup_epochs": args.task_cvar_warmup_epochs,
             "task_cvar_schedule_enabled": args.task_cvar_start_weight is not None,
             "task_cvar_final_effective_weight": last_effective_task_cvar_weight,
+        },
+        "prefix_noise": {
+            "std": prefix_noise_std,
+            "enabled": prefix_noise_std > 0.0,
+            "seed": prefix_noise_seed,
         },
     }
     torch.save(checkpoint, output_dir / "checkpoint.pt")
