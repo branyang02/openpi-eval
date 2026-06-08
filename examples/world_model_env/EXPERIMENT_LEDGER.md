@@ -793,6 +793,23 @@ is **`0.04420376801863313`**.
   best balanced checkpoint and weighted 3GT:1Gen only as an 8-step-specific diagnostic.
   The next source-mixing knob should be epoch length, staged sampling, or seed
   robustness rather than more static ratios around 3:1.
+- **Weighted 2GT:1Gen seed robustness check (2026-06-08)** Repeated the best balanced
+  source-aware recipe with seeds `110` and `111` using the same `[GT, generated-full-s4]`
+  sources, `cache_weights=(2, 1)`, `samples_per_epoch=1056`, and action-expert
+  hyperparameters.
+
+  | Checkpoint | GT eval MSE | generated-full s4 MSE | generated-full s8 MSE |
+  |---|---:|---:|---:|
+  | weighted 2GT:1Gen seed109 | `2.3013405799865723` | `3.704715117768957` | `3.68119889051796` |
+  | weighted 2GT:1Gen seed110, `output/pi05_wan_action_expert_weighted_gt2_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed110_e300_h512_l6_spe1056` | `2.5171968936920166` | `4.027140840589215` | `3.760594625343732` |
+  | weighted 2GT:1Gen seed111, `output/pi05_wan_action_expert_weighted_gt2_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed111_e300_h512_l6_spe1056` | `2.333611488342285` | `3.554038408137735` | `3.453293501059417` |
+
+  Interpretation: seed variance is material, but the 2GT:1Gen source-aware recipe is
+  not a one-off. Seed111 is now the best generated-full checkpoint on both 4-step and
+  8-step generated eval while keeping GT eval close to seed109 and better than the old
+  duplicate-cache 2GT:1Gen baseline. Treat seed111 as the current best generated-prefix
+  action expert, and use seed sweeps/selection as a first-class part of this small-cache
+  protocol.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
