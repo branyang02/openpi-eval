@@ -557,6 +557,28 @@ is **`0.04420376801863313`**.
   latent caches instead of an intermediate noisy sample, an offline GT-to-generated
   prefix interpolation sensitivity sweep, and hardening the prefix/future-cache join
   with episode/frame parity assertions before scaling.
+- **GT-future prefix-noise 0.05 ablation (2026-06-08)** Implemented training-only
+  Gaussian prefix-token perturbation for `train_pi05_wan_action_expert.py`
+  (`--prefix-noise-std`, default `0.0`; optional deterministic
+  `--prefix-noise-seed`) and validated the implementation with focused tests plus full
+  world-model checks (`ruff check .`, `pre-commit run --all-files`, and
+  `pytest -q tests` -> `778 passed, 1 skipped`). Training artifact:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_prefixnoise005_seed109_e300_h512_l6/metrics.json`.
+  With `prefix_noise_std=0.05`, the broad GT-oracle held-out eval improved to
+  `val_model_zero_noise_mse=2.223419189453125`, better than no-dropout (`2.4864`)
+  and dropout 0.2 (`2.3752`). Narrow four-row evals with this checkpoint:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_generated_smoke` | `0.11246896191326297` | `0.05623448095663149` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_smoke` | `0.7481807743387987` | `0.3428631495305358` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_smoke` | `10.156493500037111` | `1.9092146272157966` |
+
+  Interpretation: raw isotropic prefix-token noise is useful regularization for broad
+  GT-oracle prefixes, but it does not mimic generated-prefix distribution shift and
+  worsens generated full/partial transfer on the narrow smoke. The next robustness test
+  should be generated-aware perturbation, direct mixed GT+generated prefix training, or
+  an interpolation sensitivity sweep rather than larger raw Gaussian noise.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
