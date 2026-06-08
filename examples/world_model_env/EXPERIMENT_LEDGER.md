@@ -433,6 +433,26 @@ is **`0.04420376801863313`**.
   (`2.4864` vs `3.0318`). Interpretation: future latent slots provide useful oracle
   information to the action expert; the next high-value experiment is to replace
   oracle slots with generated or partially-denoised Wan latents and measure the gap.
+- **Narrow generated-latent prefix smoke (2026-06-08)** While preparing the generated
+  smoke, the bridge was fixed to accept legacy generated latent cache metadata where
+  `dataset_config` contains only `source` and the remaining dataset identity lives at
+  top level. Focused verification passed:
+  `pytest tests/test_wan_prefix_cache.py` -> `33 passed`; precommit on the touched
+  files also passed. Using existing generated Wan latent caches for episodes `[2, 3]`
+  with `samples_per_episode=2`, plus a freshly built matching GT Wan VAE latent cache,
+  the oracle-trained action expert above was evaluated on four-row prefix caches:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_generated_smoke` | `0.060996670148117514` | `0.030498335074058757` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_smoke` | `0.49319802502505866` | `0.2375960252596063` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_smoke` | `9.30703801342866` | `1.7251916243343661` |
+
+  The same four-row mean-action baseline is `0.10328263645612615`, so the generated
+  full cache is already worse than mean action and partial 2/4 is much worse. Treat
+  this as a narrow negative generated-latent smoke, not a 44-task benchmark. It
+  suggests the next generated-prefix work should inspect latent alignment/scale and
+  task prompts before spending compute on a broad generated cache.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
