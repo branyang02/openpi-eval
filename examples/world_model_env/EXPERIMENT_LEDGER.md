@@ -505,6 +505,25 @@ is **`0.04420376801863313`**.
   Interpretation: swapping to cross-attention does not improve generated-latent
   robustness here; it worsens both broad GT and narrow generated-full scores. Keep the
   plain encoder decoder as the stronger baseline for this prefix-token action expert.
+- **GT-future prefix dropout robustness ablation (2026-06-08)** Tested whether ordinary
+  model dropout makes the plain encoder action expert less brittle to generated-prefix
+  perturbations. Artifact:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_dropout01_seed109_e300_h512_l6/metrics.json`.
+  This used the original GT-future prefix caches and action-expert hyperparameters with
+  `dropout=0.1`. Broad held-out GT eval scored
+  `val_model_zero_noise_mse=2.5729944705963135`, worse than the no-dropout encoder
+  baseline (`2.4864377975463867`). Narrow four-row evals:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_generated_smoke` | `0.10155734801042866` | `0.05077867400521434` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_smoke` | `0.40410634469190204` | `0.1826267271275436` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_smoke` | `9.287772455684122` | `1.8240064680686825` |
+
+  Interpretation: dropout improves generated full versus the no-dropout encoder
+  (`0.4041` vs `0.4932`) but hurts broad GT and is still far worse than the four-row
+  mean-action baseline (`0.1033`). This is weak positive evidence for explicit
+  prefix-perturbation robustness, not a usable fix.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
