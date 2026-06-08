@@ -722,6 +722,31 @@ is **`0.04420376801863313`**.
   generation cost. Future work should test whether training the mixed action expert on
   8-step generated prefixes closes more of the gap, but this confirms Wan generation
   quality is still a useful optimization axis.
+- **Wan denoise steps 8 mixed-source training (2026-06-08)** Built the matching broad
+  train latent/prefix cache for 8-step generated-full Wan futures:
+  `output/generated_wan_latent_cache_real_lora3_e5_epoch4_diverse44_train2_spe4_h4_full_s8`
+  and
+  `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_train2_spe4_h4_full_s8`
+  (`352` rows, same Wan2.2 TI2V 5B + LoRA epoch 4 stack as the 8-step eval cache). Then
+  trained the duplicated-source 2GT:1Gen recipe on
+  `[GT, GT, generated-full-s8]`:
+  `output/pi05_wan_action_expert_gt2_plus_generated1_full_s8_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`.
+  Held-out GT eval worsened to `val_model_zero_noise_mse=2.8505072593688965` versus the
+  4-step-trained 2GT:1Gen checkpoint's `2.3467092514038086`. Generated-prefix evals
+  with the new 8-step-trained checkpoint were also worse than the older 4-step-trained
+  checkpoint:
+
+  | Eval prefix cache | new 8-step-trained MSE | previous 4-step-trained MSE |
+  |---|---:|---:|
+  | 8-step generated-full, `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_eval2_3_spe2_h4_full_s8` | `3.6883929861274707` | `3.5621491755208057` |
+  | 4-step generated-full, `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_eval2_3_spe2_h4_full_s4` | `3.8901614370791417` | `3.707585881785124` |
+
+  Both generated evals still beat the mean-action baseline (`5.9412087723871245`), but
+  training on 8-step generated prefixes did not close the gap. Interpretation: simply
+  matching the training generated-cache denoise step count to 8 is a negative result.
+  The current best generated-full checkpoint remains the 4-step-trained 2GT:1Gen model;
+  future work should prefer source-aware sampling/weighting or better Wan future quality
+  over more 8-step mixed-source training at the same recipe.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
