@@ -359,6 +359,26 @@ is **`0.04420376801863313`**.
   and treat `pi05` as an ablation/selection option rather than a universal fix.
   The next credible use is pairing it with task-tail/CVaR objectives or selecting
   across seeds on a held-out validation set.
+- **Next hybrid Wan/action-memory implementation decision (2026-06-08)** A
+  read-only sidecar architecture review agreed with the local audit: the next
+  credible hybrid experiment is not native Wan KV and not another prefix-pooling
+  ablation. First build a GT-oracle real-future-latent prefix producer that
+  places cached Wan VAE latents from dataset futures into the existing DiT-hidden
+  future latent slots, then train/evaluate the existing action expert on the
+  unchanged row schema. This answers the highest-information question first:
+  whether the current prefix-action architecture can use real future latent
+  content at all. Only if GT future-latent prefixes improve action MSE should we
+  spend compute on generated or partially-denoised future-latent prefixes.
+  Native Wan attention KV remains out of scope for the next step because the
+  current DiffSynth path does not expose reusable KV, and Wan self-attention KV
+  is timestep/noise/latent-dependent. Concrete implementation slice:
+  `world_model/wan_dit_prefix_encoder.py` should accept validated optional
+  future latents for slots `1:`, `cache_pi05_wan_prefix_tokens.py` should join a
+  future-latent cache by dataset index and write honest oracle/generated
+  provenance metadata, and `tests/test_wan_dit_prefix_encoder.py` plus
+  `tests/test_wan_prefix_cache.py` should cover shape validation, cache joins,
+  missing/duplicate rows, and metadata. Serving should stay current-prefix-only
+  until the offline cache/eval path shows useful signal.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
