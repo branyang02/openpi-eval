@@ -579,6 +579,28 @@ is **`0.04420376801863313`**.
   worsens generated full/partial transfer on the narrow smoke. The next robustness test
   should be generated-aware perturbation, direct mixed GT+generated prefix training, or
   an interpolation sensitivity sweep rather than larger raw Gaussian noise.
+- **GT-to-generated prefix interpolation sweep (2026-06-08)** Added
+  `interpolate_wan_prefix_caches.py`, a diagnostic utility that validates matched
+  cache row alignment and writes blended prefix-token caches
+  `(1 - alpha) * GT + alpha * generated`. Focused verification passed:
+  `pytest tests/test_interpolate_wan_prefix_caches.py` -> `4 passed`, focused `ruff`
+  and pre-commit passed. On the same four-row GT-vs-generated-full smoke, evaluating
+  the original no-noise GT-oracle action expert gave:
+
+  | alpha toward generated full | dataset action MSE | smooth L1 |
+  |---:|---:|---:|
+  | `0.00` | `0.060996670148117514` | `0.030498335074058757` |
+  | `0.25` | `0.03343255243623729` | `0.01671627621811864` |
+  | `0.50` | `0.06578365645778102` | `0.03289182822889051` |
+  | `0.75` | `0.2102514107064981` | `0.10512570535324905` |
+  | `1.00` | `0.49319802502505866` | `0.2375960252596063` |
+
+  Interpretation: this is not an immediate off-manifold cliff. A small generated-prefix
+  move can improve this tiny held-out assembly slice, and a 50% blend is still near GT.
+  The large error appears after the generated contribution dominates. This supports
+  training on generated-aware perturbations or mixed GT/generated prefixes, and it makes
+  a broader interpolation sweep worth running before investing in larger generated
+  caches.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
