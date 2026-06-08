@@ -1779,6 +1779,30 @@ is **`0.04420376801863313`**.
   already worse than Loop80. Interpretation: this formulation did not make the IDM
   learn useful action differences between futures.
 
+### Loop83 decoded-video IDM 8-task closed-loop panel — narrow success
+- **Question** Does the latest explicit `decoded_video_idm` stack that succeeds on
+  assembly generalize to a small task-diverse closed-loop panel?
+- **Stack / run shape** Same `decoded_video_idm` checkpoint and Wan-LoRA as Loop77:
+  `output/idm_flow_patch_crossattn_futuredelta_gt_ep0_15_spe64_h4_seed7_no_rank/best_idm_checkpoint.pt`
+  with `output/wan_metaworld_ep0_15_1424_128_lora3_e5/epoch-4.safetensors`,
+  `num_frames=17`, `num_inference_steps=4`, seed `7`, `max_steps=300`,
+  `replan_steps=4`, and `num_episodes=2` per task. Two servers ran in parallel on
+  ports `8170`/`8171`.
+- **Artifacts** Aggregate client results:
+  `examples/metaworld/output/loop81_patch_futuredelta_epoch4_steps4_panel_gpu0/results.json`
+  and
+  `examples/metaworld/output/loop81_patch_futuredelta_epoch4_steps4_panel_gpu1/results.json`.
+  Per-episode JSON/video artifacts are under each task directory in those two output
+  roots.
+- **Metrics / interpretation** GPU0 aggregate success was `0.25`: `assembly-v3=1.0`,
+  `disassemble-v3=0.0`, `reach-v3=0.0`, `push-v3=0.0`. GPU1 aggregate success was
+  `0.0`: `pick-place-v3=0.0`, `peg-insert-side-v3=0.0`, `door-open-v3=0.0`,
+  `sweep-v3=0.0`. Across the full 8-task panel this is 1 successful task out of 8, with
+  success only on the assembly task family used by the current Wan-LoRA/IDM training
+  slice. Interpretation: the decoded-video path has real closed-loop signal, but the
+  current stack is narrow; the next long run should use task-diverse Wan fine-tuning
+  and/or task-diverse IDM training rather than simply extending the assembly-only LoRA.
+
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
   assembly-only canonical split.
