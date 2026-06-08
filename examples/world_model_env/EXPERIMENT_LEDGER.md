@@ -452,7 +452,15 @@ is **`0.04420376801863313`**.
   full cache is already worse than mean action and partial 2/4 is much worse. Treat
   this as a narrow negative generated-latent smoke, not a 44-task benchmark. It
   suggests the next generated-prefix work should inspect latent alignment/scale and
-  task prompts before spending compute on a broad generated cache.
+  task prompts before spending compute on a broad generated cache. Follow-up
+  diagnostic artifact:
+  `output/diagnose_generated_prefix_alignment_ep2_3_spe2_smoke/metrics.json`.
+  Generated full 4/4 has mean future-latent cosine `0.7967510968446732` vs GT and
+  mean prefix-token cosine `0.9460775256156921`, while generated partial 2/4 has
+  mean future-latent cosine `0.105997359380126` and mean prefix-token cosine
+  `0.8191804587841034`. Interpretation: partial latents are plainly misaligned; full
+  generated latents are closer in prefix space but still action-brittle on this tiny
+  sample, so action-sensitivity and prompt/task alignment need inspection before scale-up.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
