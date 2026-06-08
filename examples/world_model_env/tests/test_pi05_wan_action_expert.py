@@ -2084,3 +2084,174 @@ def test_train_eval_uses_held_out_eval_cache_for_counts_and_baseline(tmp_path) -
     assert metrics["num_val"] == 3
     assert metrics["val_mean_action_mse"] == pytest.approx(100.0)
     assert metrics["val_model_sample_mse"] >= 0.0
+
+
+def _write_standard_prefix_cache(cache_dir, *, num_rows: int, seed: int, action_dim: int = 3) -> None:
+    write_fake_prefix_cache(
+        cache_dir,
+        num_rows=num_rows,
+        prefix_tokens=2,
+        prefix_dim=8,
+        state_dim=5,
+        action_horizon=4,
+        action_dim=action_dim,
+        seed=seed,
+    )
+
+
+def _train_args(**overrides) -> Args:
+    base = {
+        "epochs": 0,
+        "batch_size": 2,
+        "hidden_dim": 16,
+        "num_layers": 1,
+        "num_heads": 4,
+        "sample_steps": 2,
+        "device": "cpu",
+    }
+    base.update(overrides)
+    return Args(**base)
+
+
+def test_train_eval_single_cache_records_train_cache_metadata(tmp_path) -> None:
+    cache_dir = tmp_path / "cache"
+    output_dir = tmp_path / "output"
+    _write_standard_prefix_cache(cache_dir, num_rows=6, seed=61)
+
+    metrics = run_train_eval(_train_args(cache_path=str(cache_dir), output_dir=str(output_dir), seed=61))
+
+    assert metrics["cache_path"] == str(cache_dir)
+    assert metrics["train_cache_paths"] == [str(cache_dir)]
+    assert metrics["train_cache_sample_counts"] == [6]
+    assert metrics["num_train"] + metrics["num_val"] == 6
+
+    checkpoint = torch.load(output_dir / "checkpoint.pt", map_location="cpu", weights_only=False)
+    assert checkpoint["train_caches"] == [{"path": str(cache_dir), "num_samples": 6}]
+    assert checkpoint["metrics"]["train_cache_paths"] == [str(cache_dir)]
+    assert list(checkpoint["args"]["extra_cache_path"]) == []
+
+
+def test_train_eval_concatenates_extra_train_caches_and_records_counts(tmp_path) -> None:
+    primary_dir = tmp_path / "primary"
+    extra_dir = tmp_path / "extra"
+    eval_dir = tmp_path / "eval"
+    output_dir = tmp_path / "output"
+    _write_standard_prefix_cache(primary_dir, num_rows=4, seed=71)
+    _write_standard_prefix_cache(extra_dir, num_rows=3, seed=72)
+    _write_standard_prefix_cache(eval_dir, num_rows=2, seed=73)
+
+    metrics = run_train_eval(
+        _train_args(
+            cache_path=str(primary_dir),
+            extra_cache_path=(str(extra_dir),),
+            eval_cache_path=str(eval_dir),
+            output_dir=str(output_dir),
+            seed=71,
+        )
+    )
+
+    # eval cache is held out separately, so the full primary+extra concatenation is the train set.
+    assert metrics["train_cache_paths"] == [str(primary_dir), str(extra_dir)]
+    assert metrics["train_cache_sample_counts"] == [4, 3]
+    assert metrics["num_train"] == 7
+    assert metrics["num_val"] == 2
+    assert metrics["cache_path"] == str(primary_dir)
+    assert metrics["eval_cache_path"] == str(eval_dir)
+
+    checkpoint = torch.load(output_dir / "checkpoint.pt", map_location="cpu", weights_only=False)
+    assert checkpoint["train_caches"] == [
+        {"path": str(primary_dir), "num_samples": 4},
+        {"path": str(extra_dir), "num_samples": 3},
+    ]
+    assert list(checkpoint["args"]["extra_cache_path"]) == [str(extra_dir)]
+
+
+def test_train_eval_extra_train_caches_split_when_no_eval_cache(tmp_path) -> None:
+    primary_dir = tmp_path / "primary"
+    extra_dir = tmp_path / "extra"
+    output_dir = tmp_path / "output"
+    _write_standard_prefix_cache(primary_dir, num_rows=4, seed=81)
+    _write_standard_prefix_cache(extra_dir, num_rows=4, seed=82)
+
+    metrics = run_train_eval(
+        _train_args(
+            cache_path=str(primary_dir),
+            extra_cache_path=(str(extra_dir),),
+            output_dir=str(output_dir),
+            val_fraction=0.25,
+            seed=81,
+        )
+    )
+
+    assert metrics["train_cache_paths"] == [str(primary_dir), str(extra_dir)]
+    assert metrics["train_cache_sample_counts"] == [4, 4]
+    assert metrics["num_train"] + metrics["num_val"] == 8
+    assert "eval_cache_path" not in metrics
+
+
+def test_train_eval_normalizes_actions_across_concatenated_train_caches(tmp_path) -> None:
+    primary_dir = tmp_path / "primary"
+    extra_dir = tmp_path / "extra"
+    eval_dir = tmp_path / "eval"
+    output_dir = tmp_path / "output"
+    _write_standard_prefix_cache(primary_dir, num_rows=2, seed=91)
+    _write_standard_prefix_cache(extra_dir, num_rows=2, seed=92)
+    _write_standard_prefix_cache(eval_dir, num_rows=2, seed=93)
+    _set_cache_actions(primary_dir, 100.0)
+    _set_cache_actions(extra_dir, 102.0)
+    _set_cache_actions(eval_dir, 50.0)
+
+    metrics = run_train_eval(
+        _train_args(
+            cache_path=str(primary_dir),
+            extra_cache_path=(str(extra_dir),),
+            eval_cache_path=str(eval_dir),
+            output_dir=str(output_dir),
+            batch_size=4,
+            normalize_actions=True,
+            seed=91,
+        )
+    )
+
+    # Stats must span both train caches: mean = (2*100 + 2*102)/4 = 101, std = 1.0 per dim.
+    # Using only the primary cache would yield mean 100 and std ~0, so this pins concatenation.
+    assert metrics["action_normalization_mean"] == pytest.approx([101.0, 101.0, 101.0])
+    assert metrics["action_normalization_std"] == pytest.approx([1.0, 1.0, 1.0])
+
+
+def test_train_eval_rejects_incompatible_extra_cache_shapes(tmp_path) -> None:
+    primary_dir = tmp_path / "primary"
+    extra_dir = tmp_path / "extra"
+    output_dir = tmp_path / "output"
+    _write_standard_prefix_cache(primary_dir, num_rows=4, seed=101, action_dim=3)
+    _write_standard_prefix_cache(extra_dir, num_rows=4, seed=102, action_dim=4)
+
+    with pytest.raises(ValueError, match="Incompatible Wan prefix cache shapes"):
+        run_train_eval(
+            _train_args(
+                cache_path=str(primary_dir),
+                extra_cache_path=(str(extra_dir),),
+                output_dir=str(output_dir),
+                seed=101,
+            )
+        )
+
+
+def test_train_eval_rejects_extra_cache_with_disagreeing_wan_action_mode(tmp_path) -> None:
+    primary_dir = tmp_path / "primary"
+    extra_dir = tmp_path / "extra"
+    output_dir = tmp_path / "output"
+    _write_standard_prefix_cache(primary_dir, num_rows=3, seed=111)
+    _write_standard_prefix_cache(extra_dir, num_rows=3, seed=112)
+    _set_cache_wan_action_modes(primary_dir, ["current_wan_prefix_action_expert"] * 3)
+    _set_cache_wan_action_modes(extra_dir, ["partial_wan_prefix_action_expert"] * 3)
+
+    with pytest.raises(ValueError, match="disagree on wan_action_mode"):
+        run_train_eval(
+            _train_args(
+                cache_path=str(primary_dir),
+                extra_cache_path=(str(extra_dir),),
+                output_dir=str(output_dir),
+                seed=111,
+            )
+        )

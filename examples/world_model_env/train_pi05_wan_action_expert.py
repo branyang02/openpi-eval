@@ -9,9 +9,10 @@ from typing import Any, Literal
 
 import torch
 import tyro
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
 
 from world_model.pi05_wan_action_expert import (
+    CachedWanPrefixActionDataset,
     WanPi05ActionExpert,
     find_prefix_cache_rows,
     flow_matching_loss_per_sample_parts,
@@ -30,6 +31,7 @@ class Args:
     cache_path: str = "output/pi05_wan_prefix_cache"
     output_dir: str = "output/pi05_wan_action_expert"
     eval_cache_path: str | None = None
+    extra_cache_path: tuple[str, ...] = ()
     init_checkpoint: str | None = None
     fake_cache: bool = False
     real_wan_prefix_cache: bool = False
@@ -322,6 +324,63 @@ def _resolve_consistent_wan_action_mode(cache_paths: list[Path]) -> str | None:
     if not modes:
         return None
     return next(iter(modes))
+
+
+class _ConcatPrefixDataset(ConcatDataset):
+    """Concatenated prefix-cache dataset that also exposes the union of per-row cache paths.
+
+    Rows are concatenated in dataset order (primary cache first, then each extra cache in the order
+    given), and within a cache in ``find_prefix_cache_rows`` sorted order, so the combined dataset is
+    deterministic. ``cache_paths`` keeps the existing single-cache contract (used to resolve a
+    consistent ``wan_action_mode`` across every contributing row).
+    """
+
+    def __init__(self, datasets: Sequence[CachedWanPrefixActionDataset]) -> None:
+        dataset_list = list(datasets)
+        super().__init__(dataset_list)
+        self.cache_paths = [row_path for dataset in dataset_list for row_path in dataset.cache_paths]
+
+
+def _prefix_cache_signature(sample: Mapping[str, Any]) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
+    """Return the (prefix_tokens, state, actions) shapes that all train caches must agree on."""
+    return (
+        tuple(sample["prefix_tokens"].shape),
+        tuple(sample["state"].shape),
+        tuple(sample["actions"].shape),
+    )
+
+
+def _build_concatenated_train_dataset(
+    train_cache_paths: Sequence[Path],
+    *,
+    real_wan_prefix_cache: bool,
+) -> tuple[_ConcatPrefixDataset, list[int]]:
+    """Load every train cache, fail loudly on incompatible shapes, and concatenate deterministically.
+
+    Returns the concatenated dataset and the per-cache sample counts aligned with ``train_cache_paths``.
+    A single cache reproduces the previous single-dataset behavior (no comparison is performed).
+    """
+    if not train_cache_paths:
+        raise ValueError("At least one train cache path is required.")
+    datasets: list[CachedWanPrefixActionDataset] = []
+    sample_counts: list[int] = []
+    reference_path: Path | None = None
+    reference_signature: tuple[tuple[int, ...], ...] | None = None
+    for cache_path in train_cache_paths:
+        dataset = load_cached_prefix_dataset(cache_path, real_wan_prefix_cache=real_wan_prefix_cache)
+        signature = _prefix_cache_signature(dataset[0])
+        if reference_signature is None:
+            reference_path = cache_path
+            reference_signature = signature
+        elif signature != reference_signature:
+            raise ValueError(
+                "Incompatible Wan prefix cache shapes across train caches: "
+                f"{reference_path} has (prefix_tokens, state, actions) shapes {reference_signature} "
+                f"but {cache_path} has {signature}. All train caches must share prefix/state/action dimensions."
+            )
+        datasets.append(dataset)
+        sample_counts.append(len(dataset))
+    return _ConcatPrefixDataset(datasets), sample_counts
 
 
 def _collate_prefix_batch(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -836,6 +895,8 @@ def _load_init_checkpoint_strict(
 def run_train_eval(args: Args) -> dict[str, Any]:
     torch.manual_seed(args.seed)
     cache_path = Path(args.cache_path)
+    extra_cache_paths = [Path(path) for path in args.extra_cache_path]
+    train_cache_paths = [cache_path, *extra_cache_paths]
     eval_cache_path = Path(args.eval_cache_path) if args.eval_cache_path is not None else None
     action_loss_weighting = _normalize_action_loss_weighting(args.action_loss_weighting)
     action_loss_aggregation = _normalize_action_loss_aggregation(args.action_loss_aggregation)
@@ -860,7 +921,9 @@ def run_train_eval(args: Args) -> dict[str, Any]:
     if args.fake_cache and not find_prefix_cache_rows(cache_path):
         write_fake_prefix_cache(cache_path, num_rows=args.fake_cache_rows, seed=args.seed)
 
-    dataset = load_cached_prefix_dataset(cache_path, real_wan_prefix_cache=args.real_wan_prefix_cache)
+    dataset, train_cache_sample_counts = _build_concatenated_train_dataset(
+        train_cache_paths, real_wan_prefix_cache=args.real_wan_prefix_cache
+    )
     action_mode_cache_paths = list(dataset.cache_paths)
     if eval_cache_path is None:
         train_dataset, val_dataset = _split_dataset(dataset, val_fraction=args.val_fraction, seed=args.seed)
@@ -994,6 +1057,8 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         "num_train": len(train_dataset),
         "num_val": len(val_dataset),
         "cache_path": str(cache_path),
+        "train_cache_paths": [str(path) for path in train_cache_paths],
+        "train_cache_sample_counts": list(train_cache_sample_counts),
         "init_checkpoint": init_checkpoint_path,
         "device": str(device),
         "normalize_actions": args.normalize_actions,
@@ -1083,6 +1148,10 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         },
         "args": checkpoint_args,
         "metrics": metrics,
+        "train_caches": [
+            {"path": str(path), "num_samples": int(count)}
+            for path, count in zip(train_cache_paths, train_cache_sample_counts, strict=True)
+        ],
         "init_checkpoint": init_checkpoint_path,
         "action_normalization": action_normalization,
         "action_loss": {
