@@ -656,6 +656,23 @@ is **`0.04420376801863313`**.
   transfer. It does not solve partial/noisy generated latents, and it still trails the
   broad GT-oracle result; next useful work is mix-ratio/source-aware sampling and
   improved generated future quality rather than plain Gaussian prefix noise.
+- **Generated-only prefix training ratio ablation (2026-06-08)** Tested whether the
+  generated-transfer gain above needs GT rows in the training mix. Artifact:
+  `output/pi05_wan_action_expert_generated_full_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`.
+  This trained on only
+  `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_train2_spe4_h4_full_s4`
+  (`352` rows) with the same hyperparameters as the GT-only and mixed runs. Held-out
+  GT eval nearly collapsed to mean-action:
+  `val_model_zero_noise_mse=5.993340969085693` vs mean baseline `6.035114765167236`.
+  Broad generated-full eval at
+  `output/eval_generated_only_prefix_generated_full_diverse44_eval2_3_spe2_h4`
+  scored `dataset_action_mse=4.243594458527187`, `smooth_l1=0.6127719502976112`,
+  against the same broad generated-full mean-action baseline `5.941208772387123`.
+  Interpretation: generated-only training beats mean action on generated-full eval, but
+  it is slightly worse than the 1:1 GT+generated mixed checkpoint on generated-full
+  (`4.2436` vs `4.1327`) and much worse on GT eval (`5.9933` vs `2.3415`). Keep GT rows
+  in the mix; source-aware weighting/sampling should be explored from the 1:1 mixed
+  checkpoint rather than moving to generated-only.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
