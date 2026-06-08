@@ -334,6 +334,32 @@ is **`0.04420376801863313`**.
   like seen-cache adaptation/forgetting, not robust task-diverse generalization;
   avoid more plain train2-only stage-2 cycles unless adding task-diverse/hard-task
   data, heldout-aware weighting, or generated-video IDM.
+- **Train8 long-run current-prefix follow-up (2026-06-08)** To test whether the
+  Pi0.5-style current-Wan-prefix signal scales with more task-diverse data, built
+  non-overlapping current-prefix caches from the existing broad split metadata:
+  train cache `output/pi05_wan_dit_prefix_cache_train8_spe8_h4` has `2816` rows
+  (`44` tasks x first `8` demos/task x `8` samples/episode), and held-out eval cache
+  `output/pi05_wan_dit_prefix_cache_eval44_ep8_spe16_h4` has `704` rows (`44` tasks
+  x demo `base+8` x `16` samples/episode). Both use `prefix_dim=3072`,
+  `prefix_token_count=3`, `wan_action_mode=current_wan_prefix_action_expert`, and
+  `native_wan_attention_kv_cache=false`; the first attempted cache used the default
+  `prefix_dim=48` and was discarded before training. On this harder held-out ep8 split,
+  existing train2 checkpoints scored: unweighted encoder
+  `4.135783869438733`, fixed cross-attention CVaR
+  `3.819351467856369`, scheduled CVaR warm250 `4.09142597958369`, versus mean-action
+  baseline `6.413615345827574`. The train8/e600 encoder baseline
+  `output/pi05_wan_action_expert_train8_spe8_eval44_ep8_spe16_h4_prefixstate_norm_seed109_e600_h512_l6/checkpoint.pt`
+  scored `dataset_action_mse=2.8034204384094465`, `smooth_l1=0.2798720112292355`,
+  per-dim `[1.7306946838839652, 0.9983601839435134, 8.442046680633041, 0.04258020517726629]`.
+  The stronger train8/e600 cross-attention + fixed CVaR checkpoint
+  `output/pi05_wan_action_expert_train8_spe8_eval44_ep8_spe16_h4_prefixstate_crossattn_taskcvar_f025_w0125_seed109_e600_h512_l6_lr1e4/checkpoint.pt`
+  scored `dataset_action_mse=2.6444639857438745`, `smooth_l1=0.26098373259788626`,
+  per-dim `[1.7261478132312194, 1.081902516624207, 7.721609853876519, 0.0481957592435539]`.
+  Interpretation: this is the clearest longer-run signal so far for the
+  current-Wan-prefix/Pi0.5-style path. More task-diverse demos materially improve
+  the harder ep8 split, and cross-attention + task-CVaR still improves the dim-2 tail.
+  Next credible follow-up is a longer continuation/seed check or a heldout-aware
+  task-tail schedule on the train8 cache, not more train2-only stage-2 tuning.
 - **Pi0.5 timestep-embedding ablation (2026-06-08)** Added
   `--timestep-embedding-style {diffusion,pi05}` to the cached-prefix action
   expert. The default `diffusion` style preserves the previous geometric
