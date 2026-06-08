@@ -579,6 +579,22 @@ is **`0.04420376801863313`**.
   worsens generated full/partial transfer on the narrow smoke. The next robustness test
   should be generated-aware perturbation, direct mixed GT+generated prefix training, or
   an interpolation sensitivity sweep rather than larger raw Gaussian noise.
+- **GT-future prefix-noise 0.01 ablation (2026-06-08)** A gentler raw Gaussian
+  prefix-token noise run was also negative. Artifact:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_prefixnoise001_seed109_e300_h512_l6/metrics.json`.
+  Broad GT-oracle held-out eval scored
+  `val_model_zero_noise_mse=2.6350057125091553`, worse than no-noise (`2.4864`),
+  dropout 0.2 (`2.3752`), and prefix-noise 0.05 (`2.2234`). Narrow four-row evals:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_generated_smoke` | `0.4173261418311921` | `0.1920781599748746` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_smoke` | `0.564293572983766` | `0.26687716465882677` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_smoke` | `10.98552744278135` | `2.1334287293193084` |
+
+  Interpretation: smaller raw isotropic noise does not recover generated transfer and
+  also hurts broad GT. Do not keep sweeping this scalar without changing the
+  perturbation distribution.
 - **GT-to-generated prefix interpolation sweep (2026-06-08)** Added
   `interpolate_wan_prefix_caches.py`, a diagnostic utility that validates matched
   cache row alignment and writes blended prefix-token caches
