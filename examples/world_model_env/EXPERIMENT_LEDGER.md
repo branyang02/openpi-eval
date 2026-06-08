@@ -747,6 +747,35 @@ is **`0.04420376801863313`**.
   The current best generated-full checkpoint remains the 4-step-trained 2GT:1Gen model;
   future work should prefer source-aware sampling/weighting or better Wan future quality
   over more 8-step mixed-source training at the same recipe.
+- **Source-aware weighted sampling implementation and first sweep (2026-06-08)** Replaced
+  the duplicated-cache source-ratio hack with opt-in `cache_weights`,
+  `samples_per_epoch`, and `cache_weight_seed` support in
+  `train_pi05_wan_action_expert.py`. When weights are provided, training uses a
+  deterministic source-mass `WeightedRandomSampler` where each row from source `s`
+  receives weight `normalized_source_weight[s] / source_row_count[s]`; normalization
+  stats and eval loaders remain unweighted. Focused verification passed locally:
+  `pytest -q tests/test_train_cache_weighting.py tests/test_pi05_wan_action_expert.py tests/test_wan_prefix_cache.py`
+  -> `154 passed`; full world-model tests also passed (`811 passed, 1 skipped`), and
+  pre-commit passed on the touched files. A read-only independent review found no
+  correctness bugs, backward-compatibility regressions, or train/eval leakage.
+
+  First source-aware sweep trained on `[GT, generated-full-s4]` with
+  `samples_per_epoch=1056`, matching the old duplicated-cache epoch length without
+  duplicating normalization statistics:
+
+  | Checkpoint | GT eval MSE | generated-full s4 MSE | generated-full s8 MSE |
+  |---|---:|---:|---:|
+  | duplicate-cache 2GT:1Gen baseline | `2.3467092514038086` | `3.707585881785124` | `3.5621491755208057` |
+  | weighted 2GT:1Gen, `output/pi05_wan_action_expert_weighted_gt2_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6_spe1056` | `2.3013405799865723` | `3.704715117768957` | `3.68119889051796` |
+  | weighted 3GT:1Gen, `output/pi05_wan_action_expert_weighted_gt3_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6_spe1056` | `2.444737434387207` | `4.028186203651408` | `3.526297422494857` |
+
+  Interpretation: source-aware 2GT:1Gen is the best balanced checkpoint so far because
+  it improves GT eval and very slightly improves 4-step generated eval while removing
+  duplicate-cache normalization bias. Weighted 3GT:1Gen is worse on GT and 4-step
+  generated eval, but it gives the best 8-step generated eval to date (`3.5263`),
+  suggesting denoise-step robustness is sensitive to source weighting. Next useful
+  sweeps should test intermediate ratios or source-weight schedules, not more cache-path
+  duplication.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
