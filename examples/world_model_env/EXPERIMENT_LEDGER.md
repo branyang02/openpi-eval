@@ -704,6 +704,24 @@ is **`0.04420376801863313`**.
   rather than confident task-progress motion. This is consistent with the broad action
   results: generated futures carry useful signal after mixed/source-weighted training,
   but the Wan future quality is still the main bottleneck for robust action decoding.
+- **Wan denoise steps 8 generated-full eval (2026-06-08)** Tested whether more Wan
+  denoising improves generated-prefix action decoding without retraining the action
+  expert. Generated a matching broad eval latent cache with the same Wan2.2 TI2V 5B +
+  LoRA epoch 4 stack and `num_inference_steps=8`:
+  `output/generated_wan_latent_cache_real_lora3_e5_epoch4_diverse44_eval2_3_spe2_h4_full_s8`
+  (`176` rows), then built
+  `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_eval2_3_spe2_h4_full_s8`.
+  Generation time increased from the 4-step eval cache's `0.3803 s/row` to
+  `0.6870 s/row` (about `1.8x`). Evaluating the current best 2GT:1Gen action expert
+  `output/pi05_wan_action_expert_gt2_plus_generated1_full_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/checkpoint.pt`
+  on the 8-step generated-full prefix cache scored
+  `dataset_action_mse=3.5621491755208057`, `smooth_l1=0.47331984348089606`, versus the
+  same checkpoint on the 4-step generated-full cache at `3.707585881785124`. Mean-action
+  baseline is unchanged at `5.941208772387123`. Interpretation: more denoising gives a
+  modest but real action-decoding improvement (`~3.9%` MSE reduction) at nearly doubled
+  generation cost. Future work should test whether training the mixed action expert on
+  8-step generated prefixes closes more of the gap, but this confirms Wan generation
+  quality is still a useful optimization axis.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
