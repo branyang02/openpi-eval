@@ -419,6 +419,20 @@ is **`0.04420376801863313`**.
   positive architecture signal, not a generated-Wan or closed-loop result. Next
   comparison is a same-split current-prefix control, because the older current-prefix
   small-cache baselines used a different held-out episode/sample mix.
+- **Same-split current-prefix control (2026-06-08)** Built matching current-only Wan
+  DiT prefix caches for the same train/eval rows:
+  `output/pi05_wan_dit_current_prefix_cache_diverse44_train2_spe4_h4`
+  (`352` rows) and
+  `output/pi05_wan_dit_current_prefix_cache_diverse44_eval2_3_spe2_h4`
+  (`176` rows). Artifact:
+  `output/pi05_wan_action_expert_current_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`.
+  With the same action-expert hyperparameters as the GT-future run, current-only
+  prefixes scored `val_model_zero_noise_mse=3.0317862033843994` against the same
+  `val_mean_action_mse=6.035114765167236`. GT-oracle future-latent prefixes therefore
+  reduce same-split MSE by about `18%` relative to current-only Wan prefix features
+  (`2.4864` vs `3.0318`). Interpretation: future latent slots provide useful oracle
+  information to the action expert; the next high-value experiment is to replace
+  oracle slots with generated or partially-denoised Wan latents and measure the gap.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
