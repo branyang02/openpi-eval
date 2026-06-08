@@ -524,6 +524,23 @@ is **`0.04420376801863313`**.
   (`0.4041` vs `0.4932`) but hurts broad GT and is still far worse than the four-row
   mean-action baseline (`0.1033`). This is weak positive evidence for explicit
   prefix-perturbation robustness, not a usable fix.
+- **GT-future prefix dropout 0.2 ablation (2026-06-08)** Follow-up strength sweep for
+  ordinary model dropout. Artifact:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_dropout02_seed109_e300_h512_l6/metrics.json`.
+  With `dropout=0.2`, broad held-out GT eval improved to
+  `val_model_zero_noise_mse=2.3751871585845947`, better than the no-dropout encoder
+  (`2.4864377975463867`) and dropout 0.1 (`2.5729944705963135`). Narrow four-row evals:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_generated_smoke` | `0.14954093352698963` | `0.07477046676349483` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_smoke` | `0.6060374949838444` | `0.28842560712601006` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_smoke` | `13.667292885949822` | `2.3486179676650405` |
+
+  Interpretation: dropout 0.2 is the best broad GT-oracle action-MSE checkpoint so
+  far, but it worsens generated-latent transfer. Ordinary model dropout is not enough
+  for generated prefixes; the next robustness step needs generated-aware prefix
+  perturbation or direct generated-prefix training/eval.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
