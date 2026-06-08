@@ -776,6 +776,23 @@ is **`0.04420376801863313`**.
   suggesting denoise-step robustness is sensitive to source weighting. Next useful
   sweeps should test intermediate ratios or source-weight schedules, not more cache-path
   duplication.
+- **Intermediate source-ratio sweep (2026-06-08)** Tested the obvious ratios between
+  the balanced-best 2GT:1Gen and the 8-step-best 3GT:1Gen using the same source-aware
+  sampler, generated-full-s4 training cache, `samples_per_epoch=1056`, and seed `109`.
+
+  | Checkpoint | GT eval MSE | generated-full s4 MSE | generated-full s8 MSE |
+  |---|---:|---:|---:|
+  | weighted 2GT:1Gen | `2.3013405799865723` | `3.704715117768957` | `3.68119889051796` |
+  | weighted 2.5GT:1Gen, `output/pi05_wan_action_expert_weighted_gt2p5_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6_spe1056` | `2.39205002784729` | `3.9609730901851568` | `3.6168201305633105` |
+  | weighted 3GT:1Gen | `2.444737434387207` | `4.028186203651408` | `3.526297422494857` |
+  | weighted 3.5GT:1Gen, `output/pi05_wan_action_expert_weighted_gt3p5_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6_spe1056` | `2.5323164463043213` | `3.868832838863595` | `3.7139446530594777` |
+
+  Interpretation: no intermediate ratio dominates. The 2.5GT:1Gen run improves over
+  2GT:1Gen on 8-step generated eval but loses substantially on GT and 4-step generated
+  eval; 3.5GT:1Gen does not beat 3GT:1Gen on 8-step eval. Keep weighted 2GT:1Gen as the
+  best balanced checkpoint and weighted 3GT:1Gen only as an 8-step-specific diagnostic.
+  The next source-mixing knob should be epoch length, staged sampling, or seed
+  robustness rather than more static ratios around 3:1.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
