@@ -541,6 +541,22 @@ is **`0.04420376801863313`**.
   far, but it worsens generated-latent transfer. Ordinary model dropout is not enough
   for generated prefixes; the next robustness step needs generated-aware prefix
   perturbation or direct generated-prefix training/eval.
+- **Generated-prefix failure audit (2026-06-08)** A read-only independent audit checked
+  the four-row generated-prefix smoke against row provenance, prompt/task labels,
+  cache ordering, future-slot extraction, action normalization, and eval plumbing. The
+  failure appears real rather than a row-join or prompt mismatch: all three prefix
+  caches score the same actions with the same normalization, the generated rows match
+  the GT rows by dataset/task/episode/frame, and the prefix builder consumes the single
+  future latent slot that the alignment diagnostic measures. The audit's root-cause
+  ranking is: (1) the action expert is overfit to clean GT-oracle future-prefix
+  manifolds and is brittle off-manifold; (2) partial generated latents are still noisy
+  intermediate denoising states, not clean future predictions; (3) full generated
+  future-latent quality is imperfect, including one low-magnitude/mode-collapsed row in
+  the four-sample smoke. Recommended next experiments are generated-aware prefix
+  perturbation or direct generated-prefix training, storing an `x0` estimate for partial
+  latent caches instead of an intermediate noisy sample, an offline GT-to-generated
+  prefix interpolation sensitivity sweep, and hardening the prefix/future-cache join
+  with episode/frame parity assertions before scaling.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
