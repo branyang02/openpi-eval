@@ -20,7 +20,13 @@ class Args:
     overwrite: bool = False
 
 
+PI05_WAN_PREFIX_INTERPOLATION_CACHE_KIND = "pi05_wan_prefix_interpolation"
+
 _ALIGNMENT_KEYS = ("dataset_index", "episode_index", "frame_index", "task_index", "source_dataset_index")
+# Identity keys strong enough to align two rows by content rather than by list position. At least one
+# must be shared by both manifests, otherwise an interpolation would silently blend unrelated rows.
+_STRONG_ALIGNMENT_KEYS = ("dataset_index", "source_dataset_index")
+_FUTURE_LATENT_FLAG_KEYS = ("contains_future_ground_truth_latents", "contains_future_latents")
 
 
 def _validate_alpha(alpha: float) -> float:
@@ -115,6 +121,44 @@ def _require_matching_sample_rows(
         )
 
 
+def _require_strong_alignment(
+    base_manifest: Sequence[Mapping[str, Any]],
+    target_manifest: Sequence[Mapping[str, Any]],
+) -> None:
+    shared_strong_keys = [
+        key
+        for key in _STRONG_ALIGNMENT_KEYS
+        if all(key in row for row in base_manifest) and all(key in row for row in target_manifest)
+    ]
+    if not shared_strong_keys:
+        raise ValueError(
+            "Refusing to interpolate without strong alignment metadata: both manifests must share a strong "
+            f"alignment key (one of {_STRONG_ALIGNMENT_KEYS}) on every row so rows are blended by identity "
+            "rather than by list position."
+        )
+
+
+def _source_contributions(alpha: float) -> tuple[bool, bool]:
+    """Return whether (base, target) carry strictly positive weight in (1 - alpha) * base + alpha * target."""
+    return alpha < 1.0, alpha > 0.0
+
+
+def _honest_source_flag(
+    *,
+    base_flag: Any,
+    target_flag: Any,
+    base_contributes: bool,
+    target_contributes: bool,
+) -> bool:
+    """True when any positively weighted source declares the flag."""
+    return bool((base_contributes and bool(base_flag)) or (target_contributes and bool(target_flag)))
+
+
+def _row_declares_flag(sample: Mapping[str, Any], manifest_row: Mapping[str, Any], key: str) -> bool:
+    metadata = sample.get("metadata") or {}
+    return bool(metadata.get(key)) or bool(manifest_row.get(key))
+
+
 def interpolate_prefix_caches(args: Args) -> dict[str, Any]:
     alpha = _validate_alpha(args.alpha)
     base_cache = Path(args.base_cache_path).expanduser().resolve()
@@ -132,7 +176,9 @@ def interpolate_prefix_caches(args: Args) -> dict[str, Any]:
             f"Cache row counts differ: {base_cache} has {len(base_manifest)}, "
             f"{target_cache} has {len(target_manifest)}."
         )
+    _require_strong_alignment(base_manifest, target_manifest)
 
+    base_contributes, target_contributes = _source_contributions(alpha)
     interpolation_metadata = {
         "alpha": alpha,
         "base_cache_path": str(base_cache),
@@ -141,6 +187,7 @@ def interpolate_prefix_caches(args: Args) -> dict[str, Any]:
     }
     manifest_rows: list[dict[str, Any]] = []
     output_samples: list[tuple[str, dict[str, Any]]] = []
+    aggregated_flags = {key: False for key in _FUTURE_LATENT_FLAG_KEYS}
     for row_index, (base_manifest_row, target_manifest_row) in enumerate(zip(base_manifest, target_manifest)):
         _require_matching_manifest_rows(base_manifest_row, target_manifest_row, row_index=row_index)
         base_sample = _load_pt_row(base_cache, base_manifest_row)
@@ -151,15 +198,27 @@ def interpolate_prefix_caches(args: Args) -> dict[str, Any]:
         target_prefix = torch.as_tensor(target_sample["prefix_tokens"], dtype=torch.float32)
         blended_prefix = (1.0 - alpha) * base_prefix + alpha * target_prefix
 
+        row_flags = {}
+        for key in _FUTURE_LATENT_FLAG_KEYS:
+            value = _honest_source_flag(
+                base_flag=_row_declares_flag(base_sample, base_manifest_row, key),
+                target_flag=_row_declares_flag(target_sample, target_manifest_row, key),
+                base_contributes=base_contributes,
+                target_contributes=target_contributes,
+            )
+            row_flags[key] = value
+            aggregated_flags[key] = aggregated_flags[key] or value
+
         output_row_file = f"sample_{row_index:06d}.pt"
         output_sample = dict(base_sample)
         output_sample["prefix_tokens"] = blended_prefix
         sample_metadata = dict(output_sample.get("metadata") or {})
         sample_metadata.update(
             {
+                "cache_kind": PI05_WAN_PREFIX_INTERPOLATION_CACHE_KIND,
                 "source": "interpolated_wan_prefix_tokens",
                 "prefix_interpolation": interpolation_metadata,
-                "contains_future_ground_truth_latents": alpha == 0.0,
+                **row_flags,
             }
         )
         output_sample["metadata"] = sample_metadata
@@ -169,20 +228,33 @@ def interpolate_prefix_caches(args: Args) -> dict[str, Any]:
         output_manifest_row.update(
             {
                 "row_file": output_row_file,
+                "cache_kind": PI05_WAN_PREFIX_INTERPOLATION_CACHE_KIND,
                 "source": "interpolated_wan_prefix_tokens",
                 "prefix_interpolation": interpolation_metadata,
-                "contains_future_ground_truth_latents": alpha == 0.0,
+                **row_flags,
             }
         )
         manifest_rows.append(output_manifest_row)
 
     config = _load_json_object(base_cache / "config.json")
+    target_config = _load_json_object(target_cache / "config.json")
+    config_flags = {}
+    for key in _FUTURE_LATENT_FLAG_KEYS:
+        config_flags[key] = bool(
+            _honest_source_flag(
+                base_flag=config.get(key),
+                target_flag=target_config.get(key),
+                base_contributes=base_contributes,
+                target_contributes=target_contributes,
+            )
+            or aggregated_flags[key]
+        )
     config.update(
         {
-            "cache_kind": "pi05_wan_prefix_interpolation",
+            "cache_kind": PI05_WAN_PREFIX_INTERPOLATION_CACHE_KIND,
             "num_samples": len(manifest_rows),
             "prefix_interpolation": interpolation_metadata,
-            "contains_future_ground_truth_latents": alpha == 0.0,
+            **config_flags,
         }
     )
     result = {
