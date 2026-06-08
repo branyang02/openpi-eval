@@ -461,6 +461,31 @@ is **`0.04420376801863313`**.
   `0.8191804587841034`. Interpretation: partial latents are plainly misaligned; full
   generated latents are closer in prefix space but still action-brittle on this tiny
   sample, so action-sensitivity and prompt/task alignment need inspection before scale-up.
+- **Future-slot timestep ablation (2026-06-08)** Tested whether generated latents were
+  failing because the DiT prefix bridge used `dit_timestep=500` even for denoised
+  future slots. Built matching GT-oracle t0 prefix caches:
+  `output/pi05_wan_dit_gt_future_prefix_cache_diverse44_train2_spe4_h4_t0`
+  (`352` rows) and
+  `output/pi05_wan_dit_gt_future_prefix_cache_diverse44_eval2_3_spe2_h4_t0`
+  (`176` rows), then trained the same action expert:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_t0_prefixstate_norm_seed109_e300_h512_l6/metrics.json`.
+  Broad held-out GT t0 eval scored `val_model_zero_noise_mse=2.674940586090088`,
+  worse than the original `t=500` oracle (`2.4864377975463867`). Narrow four-row t0
+  evals with the t0-trained checkpoint:
+
+  | Eval prefix cache | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | GT future latents, `output/pi05_wan_dit_gt_future_prefix_cache_ep2_3_spe2_h4_t0_smoke` | `0.028039244527820695` | `0.014019622263910347` |
+  | generated full 4/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_full_s4_t0_smoke` | `0.6436163760988791` | `0.2890291179116442` |
+  | generated partial 2/4, `output/pi05_wan_dit_generated_future_prefix_cache_ep2_3_spe2_h4_partial_s2of4_t0_smoke` | `3.8600330526337836` | `1.0124491977738381` |
+
+  Alignment artifact:
+  `output/diagnose_generated_prefix_alignment_ep2_3_spe2_t0_smoke/metrics.json`.
+  Generated full 4/4 has mean t0 prefix-token cosine `0.9703584909439087` versus GT
+  but still poor action MSE. Interpretation: the simple timestep mismatch hypothesis
+  is negative. The generated full cache can be close in pooled Wan prefix space and
+  still be action-brittle, so the next fix should target action-head robustness or
+  generated-latent quality/conditioning rather than just changing DiT timestep.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
