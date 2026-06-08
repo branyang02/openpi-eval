@@ -361,6 +361,24 @@ def _json_normalized(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 
+_MISSING = object()
+
+
+def _future_cache_dataset_value(
+    *,
+    metadata: Mapping[str, Any],
+    dataset_config: Mapping[str, Any],
+    field: str,
+) -> Any:
+    """Read dataset metadata from current nested config or legacy top-level cache config."""
+
+    if field in dataset_config:
+        return dataset_config[field]
+    if field in metadata:
+        return metadata[field]
+    return _MISSING
+
+
 def _validate_future_latent_cache_dataset(
     future_cache: FutureLatentCache,
     *,
@@ -382,13 +400,31 @@ def _validate_future_latent_cache_dataset(
         "episodes",
         "seed",
     )
+    cached_source = _future_cache_dataset_value(
+        metadata=future_cache.metadata,
+        dataset_config=cached_dataset_config,
+        field="source",
+    )
     for field in checked_fields:
-        cached_value = _json_normalized(cached_dataset_config.get(field))
+        cached_raw_value = _future_cache_dataset_value(
+            metadata=future_cache.metadata,
+            dataset_config=cached_dataset_config,
+            field=field,
+        )
+        if cached_raw_value is _MISSING:
+            if field == "seed":
+                continue
+            if field == "synthetic_samples" and cached_source != "synthetic":
+                continue
+            raise ValueError(
+                "Future latent cache dataset_config is missing required field " f"{field}: {future_cache.cache_dir}."
+            )
+        cached_value = _json_normalized(cached_raw_value)
         requested_value = _json_normalized(requested_dataset_config.get(field))
         if cached_value != requested_value:
             raise ValueError(
                 "Future latent cache dataset_config mismatch for "
-                f"{field}: cached={cached_dataset_config.get(field)!r}, requested={requested_dataset_config.get(field)!r}."
+                f"{field}: cached={cached_raw_value!r}, requested={requested_dataset_config.get(field)!r}."
             )
 
 

@@ -586,6 +586,46 @@ def test_dit_backend_records_generated_future_latent_cache_metadata(tmp_path) ->
     assert row["metadata"]["future_slot_generator_metadata"]["stop_after_steps"] == 4
 
 
+def test_dit_backend_accepts_legacy_generated_future_latent_dataset_metadata(tmp_path) -> None:
+    cache_dir = tmp_path / "prefix_cache"
+    future_cache_dir = tmp_path / "legacy_generated_latents"
+    _write_future_latent_cache(future_cache_dir, generated=True)
+    config_path = future_cache_dir / "config.json"
+    metadata = json.loads(config_path.read_text(encoding="utf-8"))
+    dataset_config = metadata["dataset_config"]
+    for key in (
+        "repo_id",
+        "image_keys",
+        "image_size",
+        "frame_delta",
+        "max_samples",
+        "samples_per_episode",
+        "synthetic_samples",
+        "episodes",
+        "seed",
+    ):
+        metadata[key] = dataset_config[key]
+    metadata["dataset_config"] = {"source": dataset_config["source"]}
+    config_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+
+    precompute_pi05_wan_prefix_tokens(
+        _cache_args(
+            cache_dir,
+            fake_encoder=False,
+            prefix_backend="dit_hidden",
+            dit_num_latent_frames=3,
+            future_latent_cache_dir=str(future_cache_dir),
+        ),
+        encoder=_FutureLatentAwarePrefixEncoder(prefix_dim=8),
+    )
+    config = json.loads((cache_dir / "config.json").read_text(encoding="utf-8"))
+    manifest_row = _jsonl(cache_dir / "manifest.jsonl")[0]
+
+    assert config["future_slot_cache_source"] == "generated_wan_latents"
+    assert manifest_row["future_slot_cache_source"] == "generated_wan_latents"
+    assert manifest_row["future_slot_generation_seed"] == 1000
+
+
 def test_future_latent_cache_rejects_missing_and_duplicate_rows(tmp_path) -> None:
     cache_dir = tmp_path / "prefix_cache"
     missing_future_cache = tmp_path / "missing_future_latents"
