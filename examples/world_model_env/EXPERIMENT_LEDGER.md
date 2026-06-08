@@ -693,6 +693,17 @@ is **`0.04420376801863313`**.
   (`2.3467` vs `2.3415`). Oversampling generated rows to 1GT:2Gen hurts both GT and
   generated eval. Current best source ratio is therefore **2GT:1 generated-full** for
   this prefix-action-expert setting.
+- **Broad generated-full visual debug (2026-06-08)** Decoded eight representative rows
+  from `output/generated_wan_latent_cache_real_lora3_e5_epoch4_diverse44_eval2_3_spe2_h4_full_s4`
+  through the Wan VAE and wrote a contact sheet at
+  `output/visual_debug_generated_prefix_eval2_3_spe2_h4_full_s4/generated_full_eval_contact_sheet.jpg`
+  with metadata in the same directory. Rows span multiple held-out tasks including
+  assembly, coffee-button, drawer-close, handle-press, pick-place, peg-unplug, wall-reach,
+  and window-close. Visual inspection: generated futures are scene-coherent and usually
+  preserve the robot/object/viewpoint, but they mostly show small appearance/pose drift
+  rather than confident task-progress motion. This is consistent with the broad action
+  results: generated futures carry useful signal after mixed/source-weighted training,
+  but the Wan future quality is still the main bottleneck for robust action decoding.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
