@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import dataclasses
 import json
 import math
@@ -9,7 +10,7 @@ from typing import Any, Literal
 
 import torch
 import tyro
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset, WeightedRandomSampler
 
 from world_model.pi05_wan_action_expert import (
     CachedWanPrefixActionDataset,
@@ -67,6 +68,9 @@ class Args:
     eval_random_seed: int = 10_007
     prefix_noise_std: float = 0.0
     prefix_noise_seed: int | None = None
+    cache_weights: tuple[float, ...] = ()
+    samples_per_epoch: int | None = None
+    cache_weight_seed: int | None = None
     device: str = "auto"
     seed: int = 7
 
@@ -402,6 +406,129 @@ def _split_dataset(dataset: Dataset[Any], *, val_fraction: float, seed: int) -> 
     indices = torch.randperm(len(dataset), generator=generator).tolist()
     val_count = max(1, min(len(dataset) - 1, round(len(dataset) * val_fraction)))
     return Subset(dataset, indices[val_count:]), Subset(dataset, indices[:val_count])
+
+
+def _normalize_cache_weights(
+    cache_weights: Sequence[float], *, num_caches: int
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    """Validate ``cache_weights`` and return ``(raw, normalized)`` per-cache weight tuples.
+
+    ``raw`` mirrors the user-provided weights as floats; ``normalized`` sums to one. Weights must
+    align one-to-one with ``[cache_path, *extra_cache_path]``, be finite and nonnegative, and have a
+    positive sum.
+    """
+    raw = tuple(float(weight) for weight in cache_weights)
+    if len(raw) != num_caches:
+        raise ValueError(
+            "cache_weights must have one weight per train cache "
+            f"({num_caches}: [cache_path, *extra_cache_path]), got {len(raw)} weight(s)."
+        )
+    for index, weight in enumerate(raw):
+        if not math.isfinite(weight) or weight < 0.0:
+            raise ValueError(f"cache_weights must be finite and nonnegative; entry {index} is {weight!r}.")
+    total = math.fsum(raw)
+    if total <= 0.0:
+        raise ValueError(f"cache_weights must have a positive sum, got {total}.")
+    normalized = tuple(weight / total for weight in raw)
+    return raw, normalized
+
+
+def _resolve_cache_weights(
+    *,
+    cache_weights: Sequence[float],
+    samples_per_epoch: int | None,
+    cache_weight_seed: int | None,
+    num_caches: int,
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    """Validate the opt-in source-weighting Args and return ``(raw, normalized)`` weights.
+
+    An empty ``cache_weights`` keeps the default concat-shuffle behavior and forbids the companion
+    knobs (``samples_per_epoch``/``cache_weight_seed``) from being set in isolation, where they would
+    silently have no effect.
+    """
+    if not cache_weights:
+        if samples_per_epoch is not None or cache_weight_seed is not None:
+            raise ValueError(
+                "samples_per_epoch and cache_weight_seed require a non-empty cache_weights; "
+                "set --cache-weights to enable weighted source sampling."
+            )
+        return (), ()
+    if samples_per_epoch is not None and (
+        isinstance(samples_per_epoch, bool) or not isinstance(samples_per_epoch, int) or samples_per_epoch <= 0
+    ):
+        raise ValueError(f"samples_per_epoch must be a positive integer when provided, got {samples_per_epoch!r}.")
+    if cache_weight_seed is not None and (
+        isinstance(cache_weight_seed, bool) or not isinstance(cache_weight_seed, int)
+    ):
+        raise ValueError(f"cache_weight_seed must be an integer when provided, got {cache_weight_seed!r}.")
+    return _normalize_cache_weights(cache_weights, num_caches=num_caches)
+
+
+def _train_source_indices(train_dataset: Dataset[Any], concat_dataset: ConcatDataset) -> list[int]:
+    """Return the source-cache index for each row of ``train_dataset`` in row order.
+
+    ``concat_dataset`` is the full train union (primary + extra caches concatenated in order), so its
+    ``cumulative_sizes`` partition global row indices into source caches. The train half of a random
+    split is a ``Subset`` carrying global indices into the union; the un-split union is iterated in
+    order. Row order matches the per-row weight order consumed by ``WeightedRandomSampler``.
+    """
+    cumulative_sizes = concat_dataset.cumulative_sizes
+    if isinstance(train_dataset, Subset):
+        global_indices: Sequence[int] = [int(index) for index in train_dataset.indices]
+    else:
+        global_indices = range(len(concat_dataset))
+    return [bisect.bisect_right(cumulative_sizes, global_index) for global_index in global_indices]
+
+
+def _source_mass_row_weights(
+    source_indices: Sequence[int], normalized_weights: Sequence[float], *, num_sources: int
+) -> list[float]:
+    """Per-row sampling weights with source-mass semantics.
+
+    Each row of source ``s`` gets ``normalized_weights[s] / source_row_count[s]`` so the total mass of
+    a source equals its normalized weight regardless of how many rows it contributes; the expected
+    fraction of draws from a source is therefore independent of cache size. A source with positive
+    weight but no rows in the split cannot realize its mass, so that is rejected loudly.
+    """
+    if num_sources <= 0:
+        raise ValueError(f"num_sources must be positive, got {num_sources}.")
+    if len(normalized_weights) != num_sources:
+        raise ValueError(
+            f"normalized_weights must have one entry per source ({num_sources}), got {len(normalized_weights)}."
+        )
+    source_row_counts = [0] * num_sources
+    for source in source_indices:
+        if not 0 <= source < num_sources:
+            raise ValueError(f"source index {source} is out of range for {num_sources} source(s).")
+        source_row_counts[source] += 1
+    for source, weight in enumerate(normalized_weights):
+        if weight > 0.0 and source_row_counts[source] == 0:
+            raise ValueError(
+                f"cache_weights assign positive weight to cache index {source} but no rows from that cache "
+                "are present in the train split; cannot build a weighted sampler."
+            )
+    # Every weighted row was counted above, so source_row_counts[source] >= 1 here (no zero division).
+    return [normalized_weights[source] / source_row_counts[source] for source in source_indices]
+
+
+def _make_weighted_train_sampler(
+    source_indices: Sequence[int],
+    normalized_weights: Sequence[float],
+    *,
+    num_sources: int,
+    num_samples: int,
+    generator: torch.Generator,
+) -> WeightedRandomSampler:
+    """Build a deterministic source-mass ``WeightedRandomSampler`` over the train rows."""
+    if num_samples <= 0:
+        raise ValueError(f"num_samples must be positive, got {num_samples}.")
+    row_weights = _source_mass_row_weights(source_indices, normalized_weights, num_sources=num_sources)
+    return WeightedRandomSampler(
+        weights=torch.tensor(row_weights, dtype=torch.double),
+        num_samples=num_samples,
+        replacement=True,
+        generator=generator,
+    )
 
 
 def _move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
@@ -897,6 +1024,13 @@ def run_train_eval(args: Args) -> dict[str, Any]:
     cache_path = Path(args.cache_path)
     extra_cache_paths = [Path(path) for path in args.extra_cache_path]
     train_cache_paths = [cache_path, *extra_cache_paths]
+    raw_cache_weights, normalized_cache_weights = _resolve_cache_weights(
+        cache_weights=args.cache_weights,
+        samples_per_epoch=args.samples_per_epoch,
+        cache_weight_seed=args.cache_weight_seed,
+        num_caches=len(train_cache_paths),
+    )
+    cache_weighting_enabled = bool(raw_cache_weights)
     eval_cache_path = Path(args.eval_cache_path) if args.eval_cache_path is not None else None
     action_loss_weighting = _normalize_action_loss_weighting(args.action_loss_weighting)
     action_loss_aggregation = _normalize_action_loss_aggregation(args.action_loss_aggregation)
@@ -933,16 +1067,44 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         action_mode_cache_paths.extend(eval_dataset.cache_paths)
         val_dataset = eval_dataset
     wan_action_mode = _resolve_consistent_wan_action_mode(action_mode_cache_paths)
-    train_shuffle_generator = torch.Generator().manual_seed(args.seed)
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        collate_fn=_collate_prefix_batch,
-        generator=train_shuffle_generator,
-    )
+    if cache_weighting_enabled:
+        cache_weight_seed = args.cache_weight_seed if args.cache_weight_seed is not None else args.seed + 3
+        samples_per_epoch = args.samples_per_epoch if args.samples_per_epoch is not None else len(train_dataset)
+        train_sampler = _make_weighted_train_sampler(
+            _train_source_indices(train_dataset, dataset),
+            normalized_cache_weights,
+            num_sources=len(train_cache_paths),
+            num_samples=samples_per_epoch,
+            generator=torch.Generator().manual_seed(cache_weight_seed),
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            sampler=train_sampler,
+            collate_fn=_collate_prefix_batch,
+        )
+        train_sampling_mode = "weighted"
+    else:
+        cache_weight_seed = None
+        samples_per_epoch = None
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            collate_fn=_collate_prefix_batch,
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        train_sampling_mode = "concat_shuffle"
+    # eval_train_loader (normalization stats + mean-action baseline) and val_loader stay unweighted.
     eval_train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=_collate_prefix_batch)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=_collate_prefix_batch)
+    train_sampling = {
+        "mode": train_sampling_mode,
+        "cache_weights": [float(weight) for weight in raw_cache_weights],
+        "cache_weights_normalized": [float(weight) for weight in normalized_cache_weights],
+        "samples_per_epoch": samples_per_epoch,
+        "cache_weight_seed": cache_weight_seed,
+    }
 
     device = _resolve_device(args.device)
     action_norm_mean: torch.Tensor | None = None
@@ -1059,6 +1221,7 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         "cache_path": str(cache_path),
         "train_cache_paths": [str(path) for path in train_cache_paths],
         "train_cache_sample_counts": list(train_cache_sample_counts),
+        "train_sampling": train_sampling,
         "init_checkpoint": init_checkpoint_path,
         "device": str(device),
         "normalize_actions": args.normalize_actions,
@@ -1130,6 +1293,13 @@ def run_train_eval(args: Args) -> dict[str, Any]:
     checkpoint_args["init_checkpoint"] = init_checkpoint_path
     if wan_action_mode is not None:
         checkpoint_args["wan_action_mode"] = wan_action_mode
+    train_caches_metadata: list[dict[str, Any]] = []
+    for index, (path, count) in enumerate(zip(train_cache_paths, train_cache_sample_counts, strict=True)):
+        cache_entry: dict[str, Any] = {"path": str(path), "num_samples": int(count)}
+        if cache_weighting_enabled:
+            cache_entry["weight"] = float(raw_cache_weights[index])
+            cache_entry["weight_normalized"] = float(normalized_cache_weights[index])
+        train_caches_metadata.append(cache_entry)
     checkpoint = {
         "model_state_dict": model.state_dict(),
         "model_kwargs": {
@@ -1148,10 +1318,8 @@ def run_train_eval(args: Args) -> dict[str, Any]:
         },
         "args": checkpoint_args,
         "metrics": metrics,
-        "train_caches": [
-            {"path": str(path), "num_samples": int(count)}
-            for path, count in zip(train_cache_paths, train_cache_sample_counts, strict=True)
-        ],
+        "train_caches": train_caches_metadata,
+        "train_sampling": train_sampling,
         "init_checkpoint": init_checkpoint_path,
         "action_normalization": action_normalization,
         "action_loss": {
