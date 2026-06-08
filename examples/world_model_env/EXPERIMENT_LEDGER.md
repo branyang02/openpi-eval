@@ -407,6 +407,18 @@ is **`0.04420376801863313`**.
   with the frozen Wan2.2-5B DiT feature path. It is still an oracle feature-cache
   construction result, not an action-MSE or closed-loop result; next step is to train
   the action expert on this cache and compare against current-prefix baselines.
+- **GT-oracle future-latent prefix action expert (2026-06-08)** Artifact:
+  `output/pi05_wan_action_expert_gt_future_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`.
+  This trained the existing flow-matching action expert on the GT-oracle
+  future-latent prefix cache above with `conditioning_mode=wan_prefix_state`,
+  `normalize_actions=true`, `epochs=300`, `hidden_dim=512`, `num_layers=6`,
+  `num_heads=8`, `sample_steps=16`, and seed `109`. Held-out eval on the matching
+  two-episode/task GT-future prefix cache scored `val_model_zero_noise_mse=2.4864377975463867`
+  versus `val_mean_action_mse=6.035114765167236`. Interpretation: the action expert
+  can use real future-latent Wan prefix content in this oracle setting. This is
+  positive architecture signal, not a generated-Wan or closed-loop result. Next
+  comparison is a same-split current-prefix control, because the older current-prefix
+  small-cache baselines used a different held-out episode/sample mix.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
