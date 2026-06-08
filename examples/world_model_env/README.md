@@ -205,6 +205,39 @@ best modular generated-video result.
 Fixed deterministic-noise partial-prefix caches improved the partial result to
 `0.693690`, but noisy partial future slots still underperform this action
 expert.
+The partial-prefix cache can now also consume cached future latents instead of
+zero/noise placeholders. First write a Wan VAE latent cache from dataset futures,
+then join it into the DiT prefix cache by `dataset_index`:
+
+```bash
+UV_CACHE_DIR=/tmp/uv-cache uv run python cache_wan_vae_latents.py \
+    --dataset-source hf \
+    --repo-id brandonyang/metaworld_ml45 \
+    --image-keys corner4.image \
+    --output-dir output/wan_vae_latents_train2_spe16_h4 \
+    --episodes 0 1 \
+    --samples-per-episode 16 \
+    --num-future-frames 4 \
+    --action-horizon 4 \
+    --device cuda:0
+
+UV_CACHE_DIR=/tmp/uv-cache uv run python cache_pi05_wan_prefix_tokens.py \
+    --dataset-source hf \
+    --repo-id brandonyang/metaworld_ml45 \
+    --image-key corner4.image \
+    --prefix-backend dit_hidden \
+    --dit-num-latent-frames 2 \
+    --future-latent-cache-dir output/wan_vae_latents_train2_spe16_h4 \
+    --output-dir output/pi05_wan_dit_gt_future_prefix_train2_spe16_h4 \
+    --episodes 0 1 \
+    --samples-per-episode 16 \
+    --action-horizon 4 \
+    --device cuda:0
+```
+
+GT future-latent prefix caches are oracle-only and should be reported separately
+from generated or partial-denoise latent caches. They are useful as a gating
+test for whether the prefix action expert can use future latent content at all.
 Cache-style action-memory variants remain behind encoder-style current-prefix
 and the matched decoded-video smoke checkpoint. `decoder_arch='suffix_prefix_cache'`
 scored `0.195745` and its FiLM point scored `0.192989`; the 3-token

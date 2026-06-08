@@ -218,7 +218,7 @@ def test_wan_dit_hidden_extractor_removes_hooks_when_model_fn_fails() -> None:
 def test_frozen_wan_dit_prefix_encoder_signature_is_current_only() -> None:
     parameters = inspect.signature(FrozenDiffSynthWanDiTCurrentPrefixEncoder.encode_prefix).parameters
 
-    assert set(parameters) == {"self", "current_images", "prompts", "sample_indices"}
+    assert set(parameters) == {"self", "current_images", "prompts", "sample_indices", "future_latents"}
     assert "future_images" not in parameters
     assert "actions" not in parameters
 
@@ -258,6 +258,36 @@ def test_noise_future_latents_keep_legacy_batch_position_behavior_without_sample
     second = encoder._build_current_only_latents(first_frame_latents)
 
     assert torch.allclose(first, second)
+
+
+def test_explicit_future_latents_fill_future_slots_and_skip_noise() -> None:
+    encoder = object.__new__(FrozenDiffSynthWanDiTCurrentPrefixEncoder)
+    encoder.num_latent_frames = 3
+    encoder.future_latent_fill = "noise"
+    encoder.future_latent_seed = 123
+
+    first_frame_latents = torch.zeros(2, 4, 1, 2, 2)
+    future_latents = torch.arange(2 * 4 * 2 * 2 * 2, dtype=torch.float32).reshape(2, 4, 2, 2, 2)
+
+    latents = encoder._build_current_only_latents(first_frame_latents, future_latents=future_latents)
+
+    assert torch.allclose(latents[:, :, :1], first_frame_latents)
+    assert torch.allclose(latents[:, :, 1:], future_latents)
+
+
+def test_explicit_future_latents_validate_shape() -> None:
+    encoder = object.__new__(FrozenDiffSynthWanDiTCurrentPrefixEncoder)
+    encoder.num_latent_frames = 3
+    encoder.future_latent_fill = "zeros"
+    encoder.future_latent_seed = 0
+    first_frame_latents = torch.zeros(2, 4, 1, 2, 2)
+
+    with pytest.raises(ValueError, match="future_latents must have shape"):
+        encoder._build_current_only_latents(first_frame_latents, future_latents=torch.zeros(2, 4, 1, 2, 2))
+
+    encoder.num_latent_frames = 1
+    with pytest.raises(ValueError, match="future_latents require num_latent_frames > 1"):
+        encoder._build_current_only_latents(first_frame_latents, future_latents=torch.zeros(2, 4, 0, 2, 2))
 
 
 def test_frozen_wan_dit_prefix_encoder_uses_shared_timestep_for_ti2v_broadcast(

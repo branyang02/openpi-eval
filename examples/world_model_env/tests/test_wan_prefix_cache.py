@@ -62,6 +62,26 @@ class _IndexAwarePrefixEncoder(_InjectedPrefixEncoder):
         return tokens + offsets.view(-1, 1, 1)
 
 
+class _FutureLatentAwarePrefixEncoder(_InjectedPrefixEncoder):
+    def __init__(self, *, prefix_dim: int, token_count: int = 3) -> None:
+        super().__init__(prefix_dim=prefix_dim, token_count=token_count)
+        self.seen_future_latents: list[torch.Tensor] = []
+
+    def encode_prefix(
+        self,
+        current_images: torch.Tensor,
+        prompts: list[str],
+        *,
+        future_latents: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if future_latents is None:
+            raise AssertionError("future_latents must be passed when future_latent_cache_dir is configured")
+        self.seen_future_latents.append(future_latents.detach().cpu().clone())
+        tokens = super().encode_prefix(current_images, prompts)
+        future_signal = future_latents.float().mean(dim=(1, 2, 3, 4))
+        return tokens + future_signal.view(-1, 1, 1)
+
+
 def _cache_args(cache_dir, **overrides) -> CacheArgs:
     values = {
         "dataset_source": "synthetic",
@@ -83,6 +103,87 @@ def _cache_args(cache_dir, **overrides) -> CacheArgs:
 
 def _jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _future_cache_dataset_config(*, synthetic_samples: int = 6) -> dict:
+    return {
+        "source": "synthetic",
+        "repo_id": "brandonyang/metaworld_ml45",
+        "image_keys": ["corner4.image"],
+        "image_size": 16,
+        "frame_delta": 1,
+        "num_future_frames": 4,
+        "action_horizon": 4,
+        "idm_history_length": 0,
+        "max_samples": None,
+        "samples_per_episode": None,
+        "synthetic_samples": synthetic_samples,
+        "episodes": None,
+        "seed": 13,
+    }
+
+
+def _write_future_latent_cache(
+    cache_dir,
+    *,
+    indices=(0, 1, 2, 3, 4, 5),
+    duplicate_index: int | None = None,
+    generated: bool = False,
+    synthetic_samples: int = 6,
+) -> None:
+    cache_dir.mkdir(parents=True)
+    latents_dir = cache_dir / "latents"
+    latents_dir.mkdir()
+    latent_shape = (4, 3, 2, 2)
+    metadata = {
+        "version": 1,
+        "repo_id": "brandonyang/metaworld_ml45",
+        "image_keys": ["corner4.image"],
+        "image_size": 16,
+        "frame_delta": 1,
+        "num_future_frames": 4,
+        "idm_history_length": 0,
+        "wan_vae_latent_channels": 4,
+        "wan_vae_spatial_stride": 8,
+        "num_samples": len(indices) + (1 if duplicate_index is not None else 0),
+        "dataset_config": _future_cache_dataset_config(synthetic_samples=synthetic_samples),
+    }
+    if generated:
+        metadata.update(
+            {
+                "cache_schema": "generated_wan_latents",
+                "generator": {
+                    "source": "diffsynth_wan_lora",
+                    "denoise_mode": "partial",
+                    "num_inference_steps": 8,
+                    "stop_after_steps": 4,
+                },
+            }
+        )
+    else:
+        metadata.update(
+            {
+                "wan_vae_checkpoint_path": "fake-wan-vae.ckpt",
+                "wan_vae_dtype": "float32",
+            }
+        )
+    rows = []
+    for dataset_index in list(indices) + ([] if duplicate_index is None else [duplicate_index]):
+        tensor = torch.full(latent_shape, float(dataset_index), dtype=torch.float32)
+        tensor[:, 1:] += 0.25
+        relative_path = f"latents/sample_{dataset_index:06d}.pt"
+        torch.save(tensor, cache_dir / relative_path)
+        row = {
+            "dataset_index": dataset_index,
+            "latent_tensor": relative_path,
+            "latent_shape": list(latent_shape),
+        }
+        if generated:
+            row["generator_metadata"] = metadata["generator"]
+            row["seed"] = 1000 + dataset_index
+        rows.append(row)
+    (cache_dir / "config.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (cache_dir / "manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
 def _forbidden_paths(value, prefix=""):
@@ -417,6 +518,126 @@ def test_dit_noise_prefix_cache_outputs_are_batch_size_independent(tmp_path) -> 
         row_b = torch.load(cache_dir_b / f"sample_{dataset_index:06d}.pt", map_location="cpu", weights_only=False)
         assert torch.allclose(row_a["prefix_tokens"], row_b["prefix_tokens"])
         assert row_a["metadata"]["dit_future_slot_noise_seed"] == row_b["metadata"]["dit_future_slot_noise_seed"]
+
+
+def test_dit_backend_can_join_ground_truth_future_latent_cache(tmp_path) -> None:
+    cache_dir = tmp_path / "prefix_cache"
+    future_cache_dir = tmp_path / "future_latents"
+    _write_future_latent_cache(future_cache_dir)
+    encoder = _FutureLatentAwarePrefixEncoder(prefix_dim=8)
+
+    result = precompute_pi05_wan_prefix_tokens(
+        _cache_args(
+            cache_dir,
+            fake_encoder=False,
+            prefix_backend="dit_hidden",
+            dit_num_latent_frames=3,
+            future_latent_cache_dir=str(future_cache_dir),
+        ),
+        encoder=encoder,
+    )
+    config = json.loads((cache_dir / "config.json").read_text(encoding="utf-8"))
+    row = torch.load(cache_dir / "sample_000002.pt", map_location="cpu", weights_only=False)
+    manifest_row = _jsonl(cache_dir / "manifest.jsonl")[2]
+
+    assert len(encoder.seen_future_latents) == 3
+    assert encoder.seen_future_latents[1].shape == (2, 4, 2, 2, 2)
+    assert torch.allclose(encoder.seen_future_latents[1][0], torch.full((4, 2, 2, 2), 2.25))
+    for metadata in (result, config, row["metadata"], manifest_row):
+        assert metadata["wan_action_mode"] == PARTIAL_WAN_ACTION_MODE
+        assert metadata["contains_future_latents"] is True
+        assert metadata["contains_future_ground_truth_latents"] is True
+        assert metadata["uses_future_latent_slots"] is True
+        assert metadata["future_latent_slot_count"] == 2
+        assert metadata["native_wan_attention_kv_cache"] is False
+        assert metadata["future_slot_cache_source"] == "wan_vae_ground_truth_latents"
+        assert metadata["future_slot_cache_dir"] == str(future_cache_dir.resolve())
+        compression = metadata["prefix_compression"]
+        assert compression["future_slot_conditioning"] == "cached_future_latents"
+        assert compression["future_latent_fill"] == "cached"
+        assert compression["uses_future_ground_truth_latents"] is True
+    assert row["metadata"]["future_slot_cache_tensor"] == "latents/sample_000002.pt"
+    assert manifest_row["future_slot_cache_dataset_index"] == 2
+
+
+def test_dit_backend_records_generated_future_latent_cache_metadata(tmp_path) -> None:
+    cache_dir = tmp_path / "prefix_cache"
+    future_cache_dir = tmp_path / "generated_latents"
+    _write_future_latent_cache(future_cache_dir, generated=True)
+
+    precompute_pi05_wan_prefix_tokens(
+        _cache_args(
+            cache_dir,
+            fake_encoder=False,
+            prefix_backend="dit_hidden",
+            dit_num_latent_frames=3,
+            future_latent_cache_dir=str(future_cache_dir),
+        ),
+        encoder=_FutureLatentAwarePrefixEncoder(prefix_dim=8),
+    )
+    row = torch.load(cache_dir / "sample_000003.pt", map_location="cpu", weights_only=False)
+    config = json.loads((cache_dir / "config.json").read_text(encoding="utf-8"))
+
+    assert config["contains_future_latents"] is True
+    assert config["contains_future_ground_truth_latents"] is False
+    assert config["future_slot_cache_source"] == "generated_wan_latents"
+    assert config["prefix_compression"]["future_slot_generator_metadata"]["denoise_mode"] == "partial"
+    assert row["metadata"]["future_slot_generation_seed"] == 1003
+    assert row["metadata"]["future_slot_generator_metadata"]["stop_after_steps"] == 4
+
+
+def test_future_latent_cache_rejects_missing_and_duplicate_rows(tmp_path) -> None:
+    cache_dir = tmp_path / "prefix_cache"
+    missing_future_cache = tmp_path / "missing_future_latents"
+    duplicate_future_cache = tmp_path / "duplicate_future_latents"
+    _write_future_latent_cache(missing_future_cache, indices=(0, 1), synthetic_samples=3)
+    _write_future_latent_cache(duplicate_future_cache, duplicate_index=1)
+
+    with pytest.raises(ValueError, match="missing dataset_index=2"):
+        precompute_pi05_wan_prefix_tokens(
+            _cache_args(
+                cache_dir,
+                fake_encoder=False,
+                prefix_backend="dit_hidden",
+                synthetic_samples=3,
+                dit_num_latent_frames=3,
+                future_latent_cache_dir=str(missing_future_cache),
+            ),
+            encoder=_FutureLatentAwarePrefixEncoder(prefix_dim=8),
+        )
+
+    with pytest.raises(ValueError, match="duplicate dataset_index=1"):
+        precompute_pi05_wan_prefix_tokens(
+            _cache_args(
+                tmp_path / "duplicate_prefix_cache",
+                fake_encoder=False,
+                prefix_backend="dit_hidden",
+                dit_num_latent_frames=3,
+                future_latent_cache_dir=str(duplicate_future_cache),
+            ),
+            encoder=_FutureLatentAwarePrefixEncoder(prefix_dim=8),
+        )
+
+
+def test_future_latent_cache_requires_dit_future_slots(tmp_path) -> None:
+    future_cache_dir = tmp_path / "future_latents"
+    _write_future_latent_cache(future_cache_dir)
+
+    with pytest.raises(ValueError, match="requires prefix_backend='dit_hidden'"):
+        precompute_pi05_wan_prefix_tokens(
+            _cache_args(tmp_path / "fake_cache", future_latent_cache_dir=str(future_cache_dir))
+        )
+    with pytest.raises(ValueError, match="requires dit_num_latent_frames > 1"):
+        precompute_pi05_wan_prefix_tokens(
+            _cache_args(
+                tmp_path / "current_only_cache",
+                fake_encoder=False,
+                prefix_backend="dit_hidden",
+                dit_num_latent_frames=1,
+                future_latent_cache_dir=str(future_cache_dir),
+            ),
+            encoder=_FutureLatentAwarePrefixEncoder(prefix_dim=8),
+        )
 
 
 def test_dit_backend_token_pool_metadata_records_tokens_per_layer(tmp_path) -> None:

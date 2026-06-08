@@ -6,7 +6,7 @@ import inspect
 import json
 import math
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, TextIO
 
@@ -102,6 +102,7 @@ class Args:
     dit_timestep: float = 500.0
     dit_future_latent_fill: Literal["zeros", "noise"] = "zeros"
     dit_future_latent_seed: int = 0
+    future_latent_cache_dir: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -289,6 +290,187 @@ def _load_manifest_by_index(manifest_path: Path, output_dir: Path) -> dict[int, 
     return manifest_by_index
 
 
+@dataclasses.dataclass(frozen=True)
+class FutureLatentCache:
+    cache_dir: Path
+    metadata: Mapping[str, Any]
+    rows_by_index: Mapping[int, Mapping[str, Any]]
+    source: str
+    contains_ground_truth_latents: bool
+
+    def resolve_cache_path(self, relative_path: str) -> Path:
+        if not isinstance(relative_path, str) or not relative_path:
+            raise ValueError(f"Future latent cache tensor path must be a non-empty string, got {relative_path!r}.")
+        path = (self.cache_dir / relative_path).resolve()
+        if not path.is_relative_to(self.cache_dir):
+            raise ValueError(f"Future latent cache tensor path escapes cache directory: {relative_path}")
+        return path
+
+
+def _load_future_latent_manifest_by_index(manifest_path: Path) -> dict[int, dict[str, Any]]:
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Future latent cache manifest not found: {manifest_path}")
+    rows_by_index: dict[int, dict[str, Any]] = {}
+    for line_number, line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            raise ValueError(f"Future latent cache manifest row {line_number} must be a JSON object: {row!r}")
+        for key in ("dataset_index", "latent_tensor", "latent_shape"):
+            if key not in row:
+                raise ValueError(f"Future latent cache manifest row {line_number} is missing {key}: {row}")
+        dataset_index = int(row["dataset_index"])
+        if dataset_index in rows_by_index:
+            raise ValueError(f"Future latent cache manifest has duplicate dataset_index={dataset_index}.")
+        rows_by_index[dataset_index] = row
+    if not rows_by_index:
+        raise ValueError(f"Future latent cache manifest is empty: {manifest_path}")
+    return rows_by_index
+
+
+def _load_future_latent_cache(cache_dir: str | Path) -> FutureLatentCache:
+    resolved = Path(cache_dir).expanduser().resolve()
+    config_path = resolved / "config.json"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Future latent cache config not found: {config_path}")
+    metadata = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(metadata, dict):
+        raise ValueError(f"Future latent cache config must be a JSON object: {config_path}")
+    if isinstance(metadata.get("generator"), Mapping):
+        source = "generated_wan_latents"
+        contains_ground_truth_latents = False
+    elif "wan_vae_checkpoint_path" in metadata:
+        source = "wan_vae_ground_truth_latents"
+        contains_ground_truth_latents = True
+    else:
+        raise ValueError(
+            "Future latent cache must be either a generated Wan latent cache with a generator section "
+            "or a Wan VAE ground-truth latent cache with wan_vae_checkpoint_path metadata."
+        )
+    return FutureLatentCache(
+        cache_dir=resolved,
+        metadata=metadata,
+        rows_by_index=_load_future_latent_manifest_by_index(resolved / "manifest.jsonl"),
+        source=source,
+        contains_ground_truth_latents=contains_ground_truth_latents,
+    )
+
+
+def _json_normalized(value: Any) -> Any:
+    return json.loads(json.dumps(value))
+
+
+def _validate_future_latent_cache_dataset(
+    future_cache: FutureLatentCache,
+    *,
+    dataset_config: DatasetConfig,
+) -> None:
+    cached_dataset_config = future_cache.metadata.get("dataset_config")
+    if not isinstance(cached_dataset_config, Mapping):
+        raise ValueError(f"Future latent cache config is missing dataset_config: {future_cache.cache_dir}")
+    requested_dataset_config = dataclasses.asdict(dataset_config)
+    checked_fields = (
+        "source",
+        "repo_id",
+        "image_keys",
+        "image_size",
+        "frame_delta",
+        "max_samples",
+        "samples_per_episode",
+        "synthetic_samples",
+        "episodes",
+        "seed",
+    )
+    for field in checked_fields:
+        cached_value = _json_normalized(cached_dataset_config.get(field))
+        requested_value = _json_normalized(requested_dataset_config.get(field))
+        if cached_value != requested_value:
+            raise ValueError(
+                "Future latent cache dataset_config mismatch for "
+                f"{field}: cached={cached_dataset_config.get(field)!r}, requested={requested_dataset_config.get(field)!r}."
+            )
+
+
+def _normalize_latent_shape(value: Any, *, context: str) -> tuple[int, int, int, int]:
+    if not isinstance(value, list | tuple) or len(value) != 4:
+        raise ValueError(f"{context} latent_shape must have rank 4 (C,T,H,W), got {value!r}.")
+    try:
+        shape = tuple(int(dim) for dim in value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{context} latent_shape entries must be integers: {value!r}.") from error
+    if any(dim <= 0 for dim in shape):
+        raise ValueError(f"{context} latent_shape entries must be positive, got {shape}.")
+    return shape
+
+
+def _load_future_latents_for_indices(
+    future_cache: FutureLatentCache,
+    indices: Sequence[int],
+    *,
+    num_latent_frames: int,
+) -> tuple[torch.Tensor, list[dict[str, Any]]]:
+    if num_latent_frames <= 1:
+        raise ValueError("Cached future latents require dit_num_latent_frames > 1.")
+    future_latents: list[torch.Tensor] = []
+    row_metadata: list[dict[str, Any]] = []
+    for dataset_index in indices:
+        row = future_cache.rows_by_index.get(int(dataset_index))
+        if row is None:
+            raise ValueError(f"Future latent cache is missing dataset_index={dataset_index}.")
+        latent_path = future_cache.resolve_cache_path(str(row["latent_tensor"]))
+        if not latent_path.exists():
+            raise FileNotFoundError(f"Future latent cache tensor not found: {latent_path}")
+        latents = torch.load(latent_path, map_location="cpu", weights_only=True)
+        if not isinstance(latents, torch.Tensor):
+            raise TypeError(f"Future latent cache tensor must be a torch.Tensor, got {type(latents).__name__}.")
+        manifest_shape = _normalize_latent_shape(row["latent_shape"], context="Future latent cache manifest row")
+        if tuple(latents.shape) != manifest_shape:
+            raise ValueError(
+                f"Future latent cache tensor shape does not match manifest for dataset_index={dataset_index}: "
+                f"{tuple(latents.shape)} != {manifest_shape}."
+            )
+        if int(latents.shape[1]) != int(num_latent_frames):
+            raise ValueError(
+                f"Future latent cache dataset_index={dataset_index} has {int(latents.shape[1])} latent frame(s), "
+                f"but dit_num_latent_frames={num_latent_frames}. The cache must include the current latent slot "
+                "followed by future latent slots."
+            )
+        future_latents.append(latents[:, 1:].to(dtype=torch.float32).contiguous())
+        row_metadata.append(_future_latent_row_metadata(future_cache, row))
+    return torch.stack(future_latents, dim=0), row_metadata
+
+
+def _future_latent_cache_metadata(future_cache: FutureLatentCache | None) -> dict[str, Any]:
+    if future_cache is None:
+        return {}
+    metadata = {
+        "future_slot_cache_source": future_cache.source,
+        "future_slot_cache_dir": str(future_cache.cache_dir),
+    }
+    if not future_cache.contains_ground_truth_latents and isinstance(future_cache.metadata.get("generator"), Mapping):
+        metadata["future_slot_generator_metadata"] = dict(future_cache.metadata["generator"])
+    return metadata
+
+
+def _future_latent_row_metadata(
+    future_cache: FutureLatentCache,
+    row: Mapping[str, Any],
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "future_slot_cache_source": future_cache.source,
+        "future_slot_cache_dir": str(future_cache.cache_dir),
+        "future_slot_cache_tensor": row["latent_tensor"],
+        "future_slot_cache_latent_shape": list(row["latent_shape"]),
+        "future_slot_cache_dataset_index": int(row["dataset_index"]),
+    }
+    if isinstance(row.get("generator_metadata"), Mapping):
+        metadata["future_slot_generator_metadata"] = dict(row["generator_metadata"])
+    if "seed" in row:
+        metadata["future_slot_generation_seed"] = int(row["seed"])
+    return metadata
+
+
 def _batch_scalar_int(batch: dict[str, Any], key: str, local_position: int) -> int | None:
     if key not in batch:
         return None
@@ -420,10 +602,16 @@ def _dit_timestep_metadata(args: Args) -> dict[str, Any]:
     }
 
 
-def _dit_future_slot_conditioning_metadata(args: Args) -> dict[str, Any]:
+def _dit_future_slot_conditioning_metadata(
+    args: Args,
+    *,
+    future_cache: FutureLatentCache | None = None,
+) -> dict[str, Any]:
     future_latent_frames = max(int(args.dit_num_latent_frames) - 1, 0)
     if future_latent_frames == 0:
         conditioning = "none_current_latent_slot_only"
+    elif future_cache is not None:
+        conditioning = "cached_future_latents"
     elif args.dit_future_latent_fill == "noise":
         conditioning = "deterministic_per_sample_noise_placeholders"
     else:
@@ -431,10 +619,13 @@ def _dit_future_slot_conditioning_metadata(args: Args) -> dict[str, Any]:
 
     metadata: dict[str, Any] = {
         "future_slot_conditioning": conditioning,
-        "uses_future_ground_truth_latents": False,
+        "uses_future_ground_truth_latents": bool(
+            future_cache is not None and future_cache.contains_ground_truth_latents
+        ),
         "stores_future_ground_truth_latents": False,
+        **_future_latent_cache_metadata(future_cache),
     }
-    if future_latent_frames > 0 and args.dit_future_latent_fill == "noise":
+    if future_latent_frames > 0 and future_cache is None and args.dit_future_latent_fill == "noise":
         metadata.update(
             {
                 "future_slot_noise_seed_key": "dataset_index",
@@ -444,9 +635,22 @@ def _dit_future_slot_conditioning_metadata(args: Args) -> dict[str, Any]:
     return metadata
 
 
-def _dit_row_future_slot_conditioning_metadata(args: Args, *, dataset_index: int) -> dict[str, Any]:
+def _dit_row_future_slot_conditioning_metadata(
+    args: Args,
+    *,
+    dataset_index: int,
+    future_cache: FutureLatentCache | None = None,
+    future_cache_row_metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     if args.fake_encoder or args.prefix_backend != "dit_hidden":
         return {}
+    if future_cache is not None:
+        return {
+            "dit_future_slot_conditioning": "cached_future_latents",
+            "dit_stores_future_ground_truth_latents": False,
+            "dit_uses_future_ground_truth_latents": future_cache.contains_ground_truth_latents,
+            **dict(future_cache_row_metadata or {}),
+        }
     if args.dit_num_latent_frames <= 1 or args.dit_future_latent_fill != "noise":
         return {}
     return {
@@ -473,7 +677,7 @@ def _dit_tokens_per_layer_metadata(args: Args) -> int:
     return int(args.dit_tokens_per_layer)
 
 
-def _prefix_compression(args: Args) -> dict[str, Any]:
+def _prefix_compression(args: Args, *, future_cache: FutureLatentCache | None = None) -> dict[str, Any]:
     if args.fake_encoder or args.prefix_backend == "vae_text":
         return {
             "text": TEXT_COMPRESSION_DESCRIPTION,
@@ -487,6 +691,11 @@ def _prefix_compression(args: Args) -> dict[str, Any]:
         future_latent_frames = max(int(args.dit_num_latent_frames) - 1, 0)
         if future_latent_frames == 0:
             latent_source = "current-only fused latents"
+        elif future_cache is not None:
+            latent_source = (
+                f"the current latent plus {future_latent_frames} cached future latent slot(s) "
+                f"from {future_cache.source}"
+            )
         elif args.dit_future_latent_fill == "noise":
             latent_source = (
                 f"the current latent plus {future_latent_frames} deterministic per-sample noise future latent slot(s)"
@@ -509,16 +718,12 @@ def _prefix_compression(args: Args) -> dict[str, Any]:
             "selected_layers": list(args.dit_selected_layers),
             "num_latent_frames": args.dit_num_latent_frames,
             **_dit_timestep_metadata(args),
-            "future_latent_fill": args.dit_future_latent_fill,
+            "future_latent_fill": "cached" if future_cache is not None else args.dit_future_latent_fill,
             "future_latent_seed": args.dit_future_latent_seed,
-            **_dit_future_slot_conditioning_metadata(args),
+            **_dit_future_slot_conditioning_metadata(args, future_cache=future_cache),
             "fuse_vae_embedding_in_latents": True,
         }
     raise ValueError(f"Unsupported prefix backend: {args.prefix_backend!r}.")
-
-
-def _json_normalized(value: Any) -> Any:
-    return json.loads(json.dumps(value))
 
 
 def _future_latent_slot_count(args: Args) -> int:
@@ -527,14 +732,19 @@ def _future_latent_slot_count(args: Args) -> int:
     return max(int(args.dit_num_latent_frames) - 1, 0)
 
 
-def _prefix_contract_metadata(args: Args) -> dict[str, Any]:
+def _prefix_contract_metadata(args: Args, *, future_cache: FutureLatentCache | None = None) -> dict[str, Any]:
     future_latent_slot_count = _future_latent_slot_count(args)
+    contains_future_latents = future_cache is not None
     return {
-        "contains_future_ground_truth_latents": False,
+        "contains_future_ground_truth_latents": bool(
+            future_cache is not None and future_cache.contains_ground_truth_latents
+        ),
         "uses_future_latent_slots": future_latent_slot_count > 0,
         "future_latent_slot_count": future_latent_slot_count,
+        "contains_future_latents": contains_future_latents,
         "wan_backbone_runs_per_observation": 1,
         "native_wan_attention_kv_cache": False,
+        **_future_latent_cache_metadata(future_cache),
     }
 
 
@@ -544,13 +754,13 @@ def _prefix_metadata(
     dataset_config: DatasetConfig,
     num_dataset_samples: int,
     prefix_token_count: int,
+    future_cache: FutureLatentCache | None = None,
 ) -> dict[str, Any]:
     wan_action_mode = _wan_action_mode(args)
     return {
         "cache_kind": PI05_WAN_CURRENT_PREFIX_CACHE_KIND,
         "contains_future_images": False,
-        "contains_future_latents": False,
-        **_prefix_contract_metadata(args),
+        **_prefix_contract_metadata(args, future_cache=future_cache),
         "prefix_dim": args.prefix_dim,
         "prefix_token_count": prefix_token_count,
         "image_key": args.image_key,
@@ -559,7 +769,7 @@ def _prefix_metadata(
         "wan_action_mode": wan_action_mode,
         "num_dataset_samples": num_dataset_samples,
         "dataset_config": dataclasses.asdict(dataset_config),
-        "prefix_compression": _prefix_compression(args),
+        "prefix_compression": _prefix_compression(args, future_cache=future_cache),
     }
 
 
@@ -656,9 +866,18 @@ def _encode_prefix_accepts_sample_indices(prefix_encoder: WanCurrentPrefixEncode
 def _should_pass_dit_sample_indices(args: Args, prefix_encoder: WanCurrentPrefixEncoder) -> bool:
     if args.fake_encoder or args.prefix_backend != "dit_hidden":
         return False
+    if args.future_latent_cache_dir is not None:
+        return False
     if args.dit_num_latent_frames <= 1 or args.dit_future_latent_fill != "noise":
         return False
     return _encode_prefix_accepts_sample_indices(prefix_encoder)
+
+
+def _encode_prefix_accepts_future_latents(prefix_encoder: WanCurrentPrefixEncoder) -> bool:
+    parameters = inspect.signature(prefix_encoder.encode_prefix).parameters
+    return "future_latents" in parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+    )
 
 
 def _manifest_prefix_token_count(manifest_by_index: dict[int, dict[str, Any]]) -> int | None:
@@ -667,6 +886,15 @@ def _manifest_prefix_token_count(manifest_by_index: dict[int, dict[str, Any]]) -
         if isinstance(prefix_shape, list | tuple) and prefix_shape:
             return int(prefix_shape[0])
     return None
+
+
+def _validate_future_latent_cache_args(args: Args) -> None:
+    if args.future_latent_cache_dir is None:
+        return
+    if args.fake_encoder or args.prefix_backend != "dit_hidden":
+        raise ValueError("--future-latent-cache-dir requires prefix_backend='dit_hidden' with fake_encoder=False.")
+    if args.dit_num_latent_frames <= 1:
+        raise ValueError("--future-latent-cache-dir requires dit_num_latent_frames > 1.")
 
 
 def _existing_config_prefix_token_count(config_path: Path) -> int | None:
@@ -712,6 +940,7 @@ def precompute_pi05_wan_prefix_tokens(
         raise ValueError(f"prefix_dim must be positive, got {args.prefix_dim}.")
     if args.batch_size <= 0:
         raise ValueError(f"batch_size must be positive, got {args.batch_size}.")
+    _validate_future_latent_cache_args(args)
     if not args.fake_encoder and args.prefix_backend == "dit_hidden":
         _validate_dit_metadata_args(args)
 
@@ -723,6 +952,9 @@ def precompute_pi05_wan_prefix_tokens(
     manifest_path = output_dir / "manifest.jsonl"
     manifest_by_index = _load_manifest_by_index(manifest_path, output_dir)
     config_path = output_dir / "config.json"
+    future_cache = _load_future_latent_cache(args.future_latent_cache_dir) if args.future_latent_cache_dir else None
+    if future_cache is not None:
+        _validate_future_latent_cache_dataset(future_cache, dataset_config=dataset_config)
     prefix_token_count = _existing_config_prefix_token_count(config_path) or _manifest_prefix_token_count(
         manifest_by_index
     )
@@ -732,11 +964,14 @@ def precompute_pi05_wan_prefix_tokens(
             dataset_config=dataset_config,
             num_dataset_samples=len(dataset),
             prefix_token_count=prefix_token_count,
+            future_cache=future_cache,
         )
         _validate_or_write_config(output_dir=output_dir, metadata=metadata)
 
     device = resolve_device(args.device)
     prefix_encoder = encoder if encoder is not None else _build_encoder(args)
+    if future_cache is not None and not _encode_prefix_accepts_future_latents(prefix_encoder):
+        raise TypeError("future_latent_cache_dir requires a prefix encoder whose encode_prefix accepts future_latents.")
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     written = 0
@@ -766,6 +1001,14 @@ def precompute_pi05_wan_prefix_tokens(
             encode_kwargs: dict[str, Any] = {}
             if _should_pass_dit_sample_indices(args, prefix_encoder):
                 encode_kwargs["sample_indices"] = sample_indices
+            batch_future_row_metadata: list[dict[str, Any]] | None = None
+            if future_cache is not None:
+                future_latents, batch_future_row_metadata = _load_future_latents_for_indices(
+                    future_cache,
+                    sample_indices,
+                    num_latent_frames=args.dit_num_latent_frames,
+                )
+                encode_kwargs["future_latents"] = future_latents.to(device=device, non_blocking=True)
             prefix_tokens = (
                 prefix_encoder.encode_prefix(current_view, prompts, **encode_kwargs)
                 .detach()
@@ -785,6 +1028,7 @@ def precompute_pi05_wan_prefix_tokens(
                     dataset_config=dataset_config,
                     num_dataset_samples=len(dataset),
                     prefix_token_count=prefix_token_count,
+                    future_cache=future_cache,
                 )
                 _validate_or_write_config(output_dir=output_dir, metadata=metadata)
             elif int(prefix_tokens.shape[1]) != prefix_token_count:
@@ -802,11 +1046,13 @@ def precompute_pi05_wan_prefix_tokens(
                     cache_index=dataset_index,
                     local_position=position,
                 )
+                future_row_metadata = (
+                    {} if batch_future_row_metadata is None else batch_future_row_metadata[local_offset]
+                )
                 row_metadata = {
                     "cache_kind": PI05_WAN_CURRENT_PREFIX_CACHE_KIND,
                     "contains_future_images": False,
-                    "contains_future_latents": False,
-                    **_prefix_contract_metadata(args),
+                    **_prefix_contract_metadata(args, future_cache=future_cache),
                     "prefix_dim": args.prefix_dim,
                     "prefix_token_count": prefix_token_count,
                     "image_key": args.image_key,
@@ -815,8 +1061,13 @@ def precompute_pi05_wan_prefix_tokens(
                     "dataset_index": dataset_index,
                     "task": task,
                     **provenance_metadata,
-                    **_dit_row_future_slot_conditioning_metadata(args, dataset_index=dataset_index),
-                    "prefix_compression": _prefix_compression(args),
+                    **_dit_row_future_slot_conditioning_metadata(
+                        args,
+                        dataset_index=dataset_index,
+                        future_cache=future_cache,
+                        future_cache_row_metadata=future_row_metadata,
+                    ),
+                    "prefix_compression": _prefix_compression(args, future_cache=future_cache),
                 }
                 _write_sample_row(
                     path=row_path,
@@ -835,16 +1086,20 @@ def precompute_pi05_wan_prefix_tokens(
                     "actions_shape": list(batch["action_chunk"][position].shape),
                     "cache_kind": PI05_WAN_CURRENT_PREFIX_CACHE_KIND,
                     "contains_future_images": False,
-                    "contains_future_latents": False,
-                    **_prefix_contract_metadata(args),
+                    **_prefix_contract_metadata(args, future_cache=future_cache),
                     "prefix_dim": args.prefix_dim,
                     "prefix_token_count": prefix_token_count,
                     "image_key": args.image_key,
                     "source": _source_name(args),
                     "wan_action_mode": _wan_action_mode(args),
-                    "prefix_compression": _prefix_compression(args),
+                    "prefix_compression": _prefix_compression(args, future_cache=future_cache),
                     **provenance_metadata,
-                    **_dit_row_future_slot_conditioning_metadata(args, dataset_index=dataset_index),
+                    **_dit_row_future_slot_conditioning_metadata(
+                        args,
+                        dataset_index=dataset_index,
+                        future_cache=future_cache,
+                        future_cache_row_metadata=future_row_metadata,
+                    ),
                 }
                 _append_manifest_row(manifest_file, manifest_row)
                 manifest_by_index[dataset_index] = manifest_row
@@ -856,14 +1111,13 @@ def precompute_pi05_wan_prefix_tokens(
         "written": written,
         "cache_kind": PI05_WAN_CURRENT_PREFIX_CACHE_KIND,
         "contains_future_images": False,
-        "contains_future_latents": False,
-        **_prefix_contract_metadata(args),
+        **_prefix_contract_metadata(args, future_cache=future_cache),
         "prefix_dim": args.prefix_dim,
         "prefix_token_count": prefix_token_count,
         "image_key": args.image_key,
         "source": _source_name(args),
         "wan_action_mode": _wan_action_mode(args),
-        "prefix_compression": _prefix_compression(args),
+        "prefix_compression": _prefix_compression(args, future_cache=future_cache),
     }
     print(json.dumps(result, sort_keys=True))
     return result

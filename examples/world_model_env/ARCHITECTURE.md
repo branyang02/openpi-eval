@@ -114,7 +114,7 @@ Markdown for experiment notes.
 |---|---|---|
 | `decoded_video_idm` | full Wan text+image-to-video generation, future latents, and VAE-decoded future frames | IDM consumes current pixels, decoded future pixels, and current proprio; no reusable Wan memory is exposed |
 | `current_wan_prefix_action_expert` | Pi0.5-style frozen Wan current-frame/text hidden-prefix pass runs once; no future-video generation or future latent slots; not native Wan attention KV | flow action expert consumes cached Wan-derived hidden-prefix memory plus current proprio and reuses that memory across action flow denoising steps |
-| `partial_wan_prefix_action_expert` (hybrid/research) | target contract is Wan generation or incomplete denoising over future latent slots; the current prefix-cache producer only uses zero/noise future slots in one DiT feature pass | flow action expert consumes reusable Wan-derived prefix/action memory plus current proprio; decoded frames are not controller inputs |
+| `partial_wan_prefix_action_expert` (hybrid/research) | target contract is Wan generation or incomplete denoising over future latent slots; the offline prefix-cache producer can use zero/noise placeholders or cached GT/generated future latents in one DiT feature pass | flow action expert consumes reusable Wan-derived prefix/action memory plus current proprio; decoded frames are not controller inputs |
 
 Only `decoded_video_idm` consumes decoded future pixels in the action path.
 `current_wan_prefix_action_expert` matches the Pi0.5 pattern most closely: the
@@ -122,11 +122,14 @@ frozen Wan current observation/text hidden prefix is computed once, cached, and
 reused while the action expert performs flow denoising. The hybrid/research mode
 is the intended place to test Wan future-latent generation or incomplete
 denoising while exposing reusable Wan-derived memory for the action expert. The
-current prefix-token cache implementation is more limited: it can add zero/noise
-future latent slots and pool one DiT feature pass, but it does not yet bridge
-real partial-denoise Wan features into the action-expert prefix-token schema. In
-the current implementation that memory may be learned or projected
-action-expert prefix memory from Wan features.
+offline prefix-token cache can either add zero/noise future latent placeholders
+or join a cached future-latent cache by dataset index and place the cached
+future slots into the same one-pass Wan DiT feature extraction. GT Wan VAE
+future-latent caches are oracle-only; generated or partial-denoised latent
+caches carry their generator provenance in metadata. Live serving still exposes
+current-prefix only until this offline hybrid path shows useful signal. In the
+current implementation that memory may be learned or projected action-expert
+prefix memory from Wan features.
 
 In code, `WanPi05ActionExpert.prepare_action_context(...)` builds an
 `ActionDenoisingContext` once per observation/action chunk, and

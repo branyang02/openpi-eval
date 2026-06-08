@@ -512,10 +512,23 @@ class FrozenDiffSynthWanDiTCurrentPrefixEncoder:
         first_frame_latents: torch.Tensor,
         *,
         sample_indices: Sequence[int] | torch.Tensor | None = None,
+        future_latents: torch.Tensor | None = None,
     ) -> torch.Tensor:
         batch_size, channels, _, height, width = first_frame_latents.shape
         latents = first_frame_latents.new_zeros((batch_size, channels, self.num_latent_frames, height, width))
         latents[:, :, :1] = first_frame_latents
+        if future_latents is not None:
+            if self.num_latent_frames <= 1:
+                raise ValueError("future_latents require num_latent_frames > 1.")
+            future_latents = torch.as_tensor(future_latents)
+            expected_shape = (batch_size, channels, self.num_latent_frames - 1, height, width)
+            if tuple(future_latents.shape) != expected_shape:
+                raise ValueError(
+                    "future_latents must have shape (B, C, num_latent_frames - 1, H, W), "
+                    f"got {tuple(future_latents.shape)}; expected {expected_shape}."
+                )
+            latents[:, :, 1:] = future_latents.to(device=first_frame_latents.device, dtype=first_frame_latents.dtype)
+            return latents
         if self.num_latent_frames > 1 and self.future_latent_fill == "noise":
             normalized_indices = _normalize_sample_indices(sample_indices, batch_size=batch_size)
             if normalized_indices is None:
@@ -546,11 +559,16 @@ class FrozenDiffSynthWanDiTCurrentPrefixEncoder:
         prompts: Sequence[str],
         *,
         sample_indices: Sequence[int] | torch.Tensor | None = None,
+        future_latents: torch.Tensor | None = None,
     ) -> torch.Tensor:
         _validate_current_inputs(current_images, prompts)
         pipe, extractor = self._load_pipeline(current_images.device)
         first_frame_latents = self._encode_first_frame_latents(pipe, current_images)
-        latents = self._build_current_only_latents(first_frame_latents, sample_indices=sample_indices)
+        latents = self._build_current_only_latents(
+            first_frame_latents,
+            sample_indices=sample_indices,
+            future_latents=future_latents,
+        )
         context = self._encode_text_context(pipe, prompts).to(device=current_images.device, dtype=latents.dtype)
         timestep = _shared_diffsynth_timestep(self.timestep, device=current_images.device, dtype=latents.dtype)
         return extractor.extract_hidden_tokens(

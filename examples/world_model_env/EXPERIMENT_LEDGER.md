@@ -379,6 +379,20 @@ is **`0.04420376801863313`**.
   `tests/test_wan_prefix_cache.py` should cover shape validation, cache joins,
   missing/duplicate rows, and metadata. Serving should stay current-prefix-only
   until the offline cache/eval path shows useful signal.
+- **GT/generated future-latent prefix bridge implementation (2026-06-08)**
+  Implemented the offline producer side of the decision above. `cache_pi05_wan_prefix_tokens.py`
+  now accepts `--future-latent-cache-dir` for `prefix_backend='dit_hidden'` with
+  `dit_num_latent_frames>1`, joins cached Wan VAE or generated Wan latent rows by
+  `dataset_index`, slices off latent slot 0, and passes the remaining future slots
+  into `FrozenDiffSynthWanDiTCurrentPrefixEncoder.encode_prefix(...)`. The action
+  expert row schema is unchanged. Metadata records whether the cache contains GT
+  future latents, the future-slot cache source/path, generated-cache provenance
+  when present, and `native_wan_attention_kv_cache=false`. The path is offline-only;
+  serving still exposes current-prefix action experts only. Focused verification:
+  `pytest tests/test_wan_dit_prefix_encoder.py tests/test_wan_prefix_cache.py`
+  -> `48 passed, 1 skipped`; focused `ruff` also passed. No action MSE result is
+  claimed yet. Next step is to build a GT-oracle future-latent train/eval cache
+  and compare against current-prefix and decoded-video baselines.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
