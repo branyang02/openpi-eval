@@ -617,6 +617,45 @@ is **`0.04420376801863313`**.
   training on generated-aware perturbations or mixed GT/generated prefixes, and it makes
   a broader interpolation sweep worth running before investing in larger generated
   caches.
+- **Direct mixed GT+generated prefix training (2026-06-08)** Added multi-cache training
+  support to `train_pi05_wan_action_expert.py` via repeatable `--extra-cache-path`, with
+  deterministic train-cache concatenation, shape checks, cross-cache `wan_action_mode`
+  validation, and metadata recording (`train_cache_paths`, `train_cache_sample_counts`,
+  `checkpoint["train_caches"]`). Focused verification passed:
+  `pytest tests/test_pi05_wan_action_expert.py` -> `97 passed`; focused `ruff` and
+  pre-commit passed. The interpolation utility was also hardened after review: blended
+  caches now mark `contains_future_ground_truth_latents` true whenever any
+  positively-weighted source contains GT future latents, set `cache_kind` consistently,
+  and reject manifests without strong alignment metadata; focused interpolation tests
+  now pass (`8 passed`). Matching generated-full train/eval prefix caches were
+  materialized with Wan2.2 TI2V 5B + LoRA epoch 4 (`4` inference steps, base seed
+  `710`):
+  `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_train2_spe4_h4_full_s4`
+  (`352` rows) and
+  `output/pi05_wan_dit_generated_future_prefix_cache_diverse44_eval2_3_spe2_h4_full_s4`
+  (`176` rows). Training artifact:
+  `output/pi05_wan_action_expert_gt_plus_generated_full_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed109_e300_h512_l6/metrics.json`.
+  It trained on GT future prefixes plus generated-full future prefixes (`704` total
+  train rows) and evaluated on the same held-out GT eval cache as the oracle runs:
+  `val_model_zero_noise_mse=2.3415050506591797` vs GT-only no-noise `2.4864`, dropout
+  0.2 `2.3752`, and prefix-noise 0.05 `2.2234`.
+
+  | Eval prefix cache / checkpoint | dataset action MSE | smooth L1 |
+  |---|---:|---:|
+  | four-row GT, mixed checkpoint | `0.054310574865572225` | `0.027155287432786113` |
+  | four-row generated full, GT-only checkpoint | `0.49319802502505866` | `0.2375960252596063` |
+  | four-row generated full, mixed checkpoint | `0.36170012572505394` | `0.1754124531985617` |
+  | four-row generated partial 2/4, mixed checkpoint | `3.19447654103855` | `0.9307870165477307` |
+  | broad generated full eval, GT-only checkpoint | `6.3751840588749955` | `1.004933437262866` |
+  | broad generated full eval, mixed checkpoint | `4.1327067751560636` | `0.544244186503822` |
+
+  Broad generated-full mean-action baseline is `5.941208772387123`, so GT-only on
+  generated-full is worse than mean action, while mixed GT+generated training beats mean
+  action and cuts broad generated-full MSE by about `35%` (`6.3752` -> `4.1327`). This
+  is the strongest evidence so far that direct generated-prefix exposure improves
+  transfer. It does not solve partial/noisy generated latents, and it still trails the
+  broad GT-oracle result; next useful work is mix-ratio/source-aware sampling and
+  improved generated future quality rather than plain Gaussian prefix noise.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
