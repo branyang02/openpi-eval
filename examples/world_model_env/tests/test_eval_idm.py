@@ -758,7 +758,14 @@ def test_eval_idm_default_cache_behavior_remains_unchanged(tmp_path, monkeypatch
     monkeypatch.setattr("eval_idm.CachedWanVaeLatentDataset", lambda *args, **kwargs: pytest.fail("unexpected wrapper"))
     monkeypatch.setattr(
         "eval_idm.evaluate_idm",
-        lambda idm, loader, device, *, flow_eval_seed=None, flow_num_samples=None, flow_noise_scale=None, prediction_mode="sample": {
+        lambda idm,
+        loader,
+        device,
+        *,
+        flow_eval_seed=None,
+        flow_num_samples=None,
+        flow_noise_scale=None,
+        prediction_mode="sample": {
             "idm_mse": 0.0,
             "idm_smooth_l1": 0.0,
         },
@@ -875,7 +882,14 @@ def test_eval_idm_uses_checkpoint_history_length_for_dataset(tmp_path, monkeypat
     )
     monkeypatch.setattr(
         "eval_idm.evaluate_idm",
-        lambda idm, loader, device, *, flow_eval_seed=None, flow_num_samples=None, flow_noise_scale=None, prediction_mode="sample": {
+        lambda idm,
+        loader,
+        device,
+        *,
+        flow_eval_seed=None,
+        flow_num_samples=None,
+        flow_noise_scale=None,
+        prediction_mode="sample": {
             "idm_mse": 0.0,
             "idm_smooth_l1": 0.0,
         },

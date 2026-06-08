@@ -446,7 +446,9 @@ def test_generated_wan_latent_cache_rejects_duplicate_and_out_of_range_rows(tmp_
     out_of_range_rows = [
         {"dataset_index": 5, "latent_tensor": "latents/a.pt", "latent_shape": list(shape)},
     ]
-    _write_cache(tmp_path / "out_of_range", dataset_config=dataset_config, model_config=model_config, rows=out_of_range_rows)
+    _write_cache(
+        tmp_path / "out_of_range", dataset_config=dataset_config, model_config=model_config, rows=out_of_range_rows
+    )
 
     with pytest.raises(ValueError, match="dataset_index=5 is outside base dataset length"):
         GeneratedWanLatentDataset(

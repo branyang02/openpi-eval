@@ -46,9 +46,7 @@ class _RecordingFlowHead(nn.Module):
         self.time = time.detach().clone()
         self.calls.append((self.noisy_action, self.time))
         self.history_tokens = None if history_tokens is None else history_tokens.detach().clone()
-        self.visual_context_tokens = (
-            None if visual_context_tokens is None else visual_context_tokens.detach().clone()
-        )
+        self.visual_context_tokens = None if visual_context_tokens is None else visual_context_tokens.detach().clone()
         return self.predicted_velocity.to(device=noisy_action.device, dtype=noisy_action.dtype)
 
 
@@ -471,12 +469,15 @@ def test_create_flow_sample_noise_uses_configured_scale() -> None:
         dtype=torch.float32,
         generator=scaled_generator,
     )
-    expected = torch.randn(
-        4,
-        scaled_config.action_horizon,
-        scaled_config.action_dim,
-        generator=expected_generator,
-    ) * 0.25
+    expected = (
+        torch.randn(
+            4,
+            scaled_config.action_horizon,
+            scaled_config.action_dim,
+            generator=expected_generator,
+        )
+        * 0.25
+    )
 
     assert torch.allclose(scaled_noise, expected)
 

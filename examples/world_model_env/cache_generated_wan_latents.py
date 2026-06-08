@@ -423,8 +423,7 @@ def precompute_generated_wan_latents(args: Args, *, generator: Any | None = None
             current_images = batch["current_images"]
             if current_images.ndim != 5:
                 raise ValueError(
-                    "Expected batch current_images with shape (B, V, 3, H, W), "
-                    f"got {tuple(current_images.shape)}."
+                    "Expected batch current_images with shape (B, V, 3, H, W), " f"got {tuple(current_images.shape)}."
                 )
             if current_images.shape[1] != 1:
                 raise ValueError("Generated Wan latent caching currently supports exactly one image key/view.")

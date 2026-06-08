@@ -228,9 +228,7 @@ def validate_existing_cache_config(
         for key in mismatched_keys
     }
     mismatch_summary = (
-        f"different {mismatched_keys[0]}"
-        if len(mismatched_keys) == 1
-        else f"different fields {mismatched_keys}"
+        f"different {mismatched_keys[0]}" if len(mismatched_keys) == 1 else f"different fields {mismatched_keys}"
     )
     raise ValueError(
         "Cannot resume cache because existing dataset_config does not exactly match the requested "
@@ -425,9 +423,7 @@ def build_future_frame_selection_config(
     if not is_wan_future_source(args.future_source):
         return None
 
-    missing_indices = [
-        int(row["dataset_index"]) for row in manifest_rows if row.get("selected_frame_indices") is None
-    ]
+    missing_indices = [int(row["dataset_index"]) for row in manifest_rows if row.get("selected_frame_indices") is None]
     if missing_indices:
         raise ValueError(
             "Wan cache temporal metadata is incomplete for dataset_index values "
@@ -435,9 +431,7 @@ def build_future_frame_selection_config(
             "existing cached tensors; regenerate those futures with cache_future_rollouts.py."
         )
 
-    selected_by_index = {
-        str(int(row["dataset_index"])): list(row["selected_frame_indices"]) for row in manifest_rows
-    }
+    selected_by_index = {str(int(row["dataset_index"])): list(row["selected_frame_indices"]) for row in manifest_rows}
     unique_selected = {tuple(indices) for indices in selected_by_index.values()}
     unique_strategies = {
         row.get("future_frame_strategy") for row in manifest_rows if row.get("future_frame_strategy") is not None

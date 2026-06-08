@@ -340,9 +340,7 @@ def evaluate_loaded_action_expert(
         model_count = batch_model_count if model_count is None else model_count + batch_model_count
         model_smooth_l1_sum = batch_model_l1 if model_smooth_l1_sum is None else model_smooth_l1_sum + batch_model_l1
         model_smooth_l1_count = (
-            batch_model_l1_count
-            if model_smooth_l1_count is None
-            else model_smooth_l1_count + batch_model_l1_count
+            batch_model_l1_count if model_smooth_l1_count is None else model_smooth_l1_count + batch_model_l1_count
         )
         baseline_squared_error = (
             batch_baseline_squared
@@ -351,9 +349,7 @@ def evaluate_loaded_action_expert(
         )
         baseline_count = batch_baseline_count if baseline_count is None else baseline_count + batch_baseline_count
         baseline_smooth_l1_sum = (
-            batch_baseline_l1
-            if baseline_smooth_l1_sum is None
-            else baseline_smooth_l1_sum + batch_baseline_l1
+            batch_baseline_l1 if baseline_smooth_l1_sum is None else baseline_smooth_l1_sum + batch_baseline_l1
         )
         baseline_smooth_l1_count = (
             batch_baseline_l1_count

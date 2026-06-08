@@ -113,7 +113,9 @@ def test_cli_can_filter_markdown_to_one_mode() -> None:
 def test_markdown_table_renders_all_contract_flags() -> None:
     rendered = render_markdown(iter_action_mode_specs())
 
-    assert "| Mode | Wan generation | Decoded action video | Future pixels | Reusable memory | Native Wan KV |" in rendered
+    assert (
+        "| Mode | Wan generation | Decoded action video | Future pixels | Reusable memory | Native Wan KV |" in rendered
+    )
     assert "| `decoded_video_idm` | yes | yes | yes | no | no |" in rendered
     assert "| `current_wan_prefix_action_expert` | no | no | no | yes | no |" in rendered
     assert "| `partial_wan_prefix_action_expert` | yes | no | no | yes | no |" in rendered

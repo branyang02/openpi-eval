@@ -395,9 +395,7 @@ class _FakeFlowIdm(torch.nn.Module):
         context = self.transition_encoder(current_images, future_images, state)
         endpoint = context * self.flow_head.scale
         batch_size = current_images.shape[0]
-        return endpoint.reshape(batch_size, 1, 1).expand(
-            batch_size, self.config.action_horizon, self.config.action_dim
-        )
+        return endpoint.reshape(batch_size, 1, 1).expand(batch_size, self.config.action_horizon, self.config.action_dim)
 
 
 class _FakeWanLatentFlowIdm(torch.nn.Module):
@@ -685,9 +683,7 @@ def test_run_idm_training_keeps_final_metrics_compatible_and_streams_epochs(tmp_
     metrics = run_idm_training(config)
 
     written = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
-    stream_rows = [
-        json.loads(line) for line in (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
+    stream_rows = [json.loads(line) for line in (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
     assert written["history"] == metrics["history"]
     assert written["final"] == metrics["final"]
     assert written["best"] == metrics["best"]
@@ -2941,7 +2937,9 @@ def test_run_idm_training_forwards_future_usage_score_mode(tmp_path, monkeypatch
             "future_usage_score_mode": kwargs.get("score_mode"),
         }
 
-    monkeypatch.setattr(train_lib, "create_idm_model", lambda config, device: CurrentOnlyTrainingFlowIdm(config).to(device))
+    monkeypatch.setattr(
+        train_lib, "create_idm_model", lambda config, device: CurrentOnlyTrainingFlowIdm(config).to(device)
+    )
     monkeypatch.setattr(train_lib, "evaluate_idm_future_usage", fake_future_usage)
     config = TrainConfig(
         dataset=DatasetConfig(

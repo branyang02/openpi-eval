@@ -187,9 +187,7 @@ def test_eval_pi05_wan_action_expert_masks_actions_mean_baseline_and_writes_json
     assert saved["dataset_action_mse_per_action_dim"] == pytest.approx([25.0, 104.0 / 3.0])
     assert saved["mean_action_baseline"]["dataset_action_mse"] == pytest.approx(56.0 / 9.0)
     assert saved["mean_action_baseline"]["dataset_action_smooth_l1"] == pytest.approx(47.0 / 27.0)
-    assert saved["mean_action_baseline"]["dataset_action_mse_per_action_dim"] == pytest.approx(
-        [56.0 / 9.0, 56.0 / 9.0]
-    )
+    assert saved["mean_action_baseline"]["dataset_action_mse_per_action_dim"] == pytest.approx([56.0 / 9.0, 56.0 / 9.0])
     assert saved["mean_action_baseline"]["mean_action"] == pytest.approx([13.0 / 3.0, 16.0 / 3.0])
     assert saved["num_samples"] == 2
     assert saved["num_valid_action_steps"] == 3
@@ -211,7 +209,7 @@ def test_eval_pi05_wan_action_expert_loads_suffix_prefix_cache_checkpoint(
     tmp_path,
     capsys,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
     checkpoint_path = tmp_path / "checkpoint.pt"
     cache_dir = tmp_path / "cache"
     calls = 0

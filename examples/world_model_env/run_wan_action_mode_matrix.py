@@ -507,7 +507,9 @@ def compare_action_modes(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Compare Wan action-mode result JSONs as a compact matrix.")
-    parser.add_argument("--decoded-video-idm", required=True, type=Path, help="Result JSON or output dir for decoded_video_idm.")
+    parser.add_argument(
+        "--decoded-video-idm", required=True, type=Path, help="Result JSON or output dir for decoded_video_idm."
+    )
     parser.add_argument(
         "--current-wan-prefix-action-expert",
         required=True,

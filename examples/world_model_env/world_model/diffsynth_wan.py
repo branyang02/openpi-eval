@@ -388,7 +388,11 @@ def generate_diffsynth_wan_predecode_latents(
         animate_pose_video = call_args["animate_pose_video"]
         animate_face_video = call_args["animate_face_video"]
         if vace_reference_image is not None or (animate_pose_video is not None and animate_face_video is not None):
-            f = len(vace_reference_image) if vace_reference_image is not None and isinstance(vace_reference_image, list) else 1
+            f = (
+                len(vace_reference_image)
+                if vace_reference_image is not None and isinstance(vace_reference_image, list)
+                else 1
+            )
             inputs_shared["latents"] = inputs_shared["latents"][:, :, f:]
 
         for unit in pipe.post_units:
@@ -460,7 +464,9 @@ def add_diffsynth_to_path(repo_dir: str | Path) -> Path:
     if path_text not in sys.path:
         sys.path.insert(0, path_text)
     existing_pythonpath = os.environ.get("PYTHONPATH")
-    os.environ["PYTHONPATH"] = path_text if existing_pythonpath is None else f"{path_text}{os.pathsep}{existing_pythonpath}"
+    os.environ["PYTHONPATH"] = (
+        path_text if existing_pythonpath is None else f"{path_text}{os.pathsep}{existing_pythonpath}"
+    )
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     return path
 

@@ -86,9 +86,10 @@ class SinusoidalTimeEmbedding(nn.Module):
             if dim % 2 != 0:
                 raise ValueError(f"timestep_embedding_style='pi05' requires an even dim, got {dim}.")
             fraction = torch.linspace(0.0, 1.0, dim // 2, dtype=torch.float32)
-            period = _PI05_TIME_EMBEDDING_MIN_PERIOD * (
-                _PI05_TIME_EMBEDDING_MAX_PERIOD / _PI05_TIME_EMBEDDING_MIN_PERIOD
-            ) ** fraction
+            period = (
+                _PI05_TIME_EMBEDDING_MIN_PERIOD
+                * (_PI05_TIME_EMBEDDING_MAX_PERIOD / _PI05_TIME_EMBEDDING_MIN_PERIOD) ** fraction
+            )
             self.register_buffer("frequencies", 2.0 * math.pi / period, persistent=False)
             return
         half_dim = dim // 2
@@ -623,9 +624,7 @@ class WanPi05ActionExpert(nn.Module):
     def _encode_context_for_cross_attention(self, context_tokens: Sequence[torch.Tensor]) -> torch.Tensor:
         context_encoder = getattr(self, "context_encoder", None)
         if context_encoder is None:
-            raise RuntimeError(
-                "context encoder module is missing while decoder_arch='context_cross_attention'."
-            )
+            raise RuntimeError("context encoder module is missing while decoder_arch='context_cross_attention'.")
         context = torch.cat(context_tokens, dim=1)
         return context_encoder(context)
 
@@ -645,9 +644,7 @@ class WanPi05ActionExpert(nn.Module):
             raise RuntimeError(f"suffix-prefix cache modules are missing while decoder_arch={self.decoder_arch!r}.")
         return suffix_prefix_decoder(action_tokens, memory)
 
-    def _encode_prefix_memory_from_context(
-        self, context_tokens: Sequence[torch.Tensor]
-    ) -> WanActionPrefixMemory:
+    def _encode_prefix_memory_from_context(self, context_tokens: Sequence[torch.Tensor]) -> WanActionPrefixMemory:
         if self.decoder_arch not in _PREFIX_CACHE_DECODER_ARCHES:
             valid = " or ".join(repr(arch) for arch in _PREFIX_CACHE_DECODER_ARCHES)
             raise RuntimeError(f"encode_prefix_memory is only available for decoder_arch={valid}.")
@@ -1210,7 +1207,9 @@ def _load_action_normalization(
     *,
     action_dim: int,
     checkpoint_path: Path,
-) -> tuple[Mapping[str, Any], torch.Tensor | None, torch.Tensor | None, Mapping[str, tuple[torch.Tensor, torch.Tensor]]]:
+) -> tuple[
+    Mapping[str, Any], torch.Tensor | None, torch.Tensor | None, Mapping[str, tuple[torch.Tensor, torch.Tensor]]
+]:
     raw_normalization = checkpoint.get("action_normalization", {"enabled": False})
     normalization = _require_mapping(
         raw_normalization,
@@ -1233,7 +1232,9 @@ def _load_action_normalization(
             )
         task_stats: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
         for task, raw_stats in raw_tasks.items():
-            stats = _require_mapping(raw_stats, name=f"action_normalization['tasks'][{task!r}]", checkpoint_path=checkpoint_path)
+            stats = _require_mapping(
+                raw_stats, name=f"action_normalization['tasks'][{task!r}]", checkpoint_path=checkpoint_path
+            )
             mean = _normalization_tensor(stats, key="mean", action_dim=action_dim, checkpoint_path=checkpoint_path)
             std = _normalization_tensor(stats, key="std", action_dim=action_dim, checkpoint_path=checkpoint_path)
             if bool((std <= 0).any()):

@@ -765,7 +765,9 @@ def build_report(plan: Mapping[str, Any]) -> dict[str, Any]:
             for row in rows
             if int(row["frame_delta"]) == frame_delta and isinstance(row.get("primary_idm_mse"), int | float)
         ]
-        best_by_delta[str(frame_delta)] = min(candidates, key=lambda row: row["primary_idm_mse"]) if candidates else None
+        best_by_delta[str(frame_delta)] = (
+            min(candidates, key=lambda row: row["primary_idm_mse"]) if candidates else None
+        )
 
     return {
         "output_dir": str(output_dir),

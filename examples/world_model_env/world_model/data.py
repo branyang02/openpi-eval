@@ -139,8 +139,7 @@ def split_frame_pair(value: Any) -> tuple[Any, Any]:
     if array.ndim == 4 and array.shape[0] == 2:
         return array[0], array[1]
     raise ValueError(
-        "Expected a two-frame tensor/list from LeRobot delta_timestamps. "
-        f"Got value with shape {array.shape}."
+        "Expected a two-frame tensor/list from LeRobot delta_timestamps. " f"Got value with shape {array.shape}."
     )
 
 
@@ -496,9 +495,7 @@ class MetaWorldFramePairDataset(Dataset):
         dataset = LeRobotDataset(config.repo_id, episodes=episodes, delta_timestamps=delta_timestamps)
         repair_lerobot_episode_data_index(dataset, episodes)
         balanced_indices = (
-            balanced_lerobot_frame_indices(dataset, config)
-            if config.samples_per_episode is not None
-            else None
+            balanced_lerobot_frame_indices(dataset, config) if config.samples_per_episode is not None else None
         )
         if config.prompt_from_task:
             dataset = TransformedDataset(dataset, (PromptFromLeRobotTask(metadata.tasks, task_key=config.task_key),))
@@ -507,7 +504,9 @@ class MetaWorldFramePairDataset(Dataset):
         if self._indices is not None:
             self._length = len(self._indices)
         else:
-            self._length = len(self.dataset) if config.max_samples is None else min(config.max_samples, len(self.dataset))
+            self._length = (
+                len(self.dataset) if config.max_samples is None else min(config.max_samples, len(self.dataset))
+            )
 
     def __len__(self) -> int:
         return self._length
@@ -1159,8 +1158,7 @@ def _require_generated_wan_idm_history_length_match(
 def _normalize_generated_wan_generator_metadata(generator_metadata: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(generator_metadata, Mapping):
         raise ValueError(
-            "Generated Wan latent cache generator metadata must be a mapping, "
-            f"got {type(generator_metadata)}."
+            "Generated Wan latent cache generator metadata must be a mapping, " f"got {type(generator_metadata)}."
         )
     normalized = _json_normalized(dict(generator_metadata))
     if not isinstance(normalized, dict):
@@ -1435,9 +1433,7 @@ def _json_normalized(value: Any) -> Any:
 
 def sample_to_training_item(sample: Mapping[str, Any], config: DatasetConfig) -> dict[str, torch.Tensor]:
     missing = [
-        key
-        for key in [*config.image_keys, config.state_key, config.action_key, config.task_key]
-        if key not in sample
+        key for key in [*config.image_keys, config.state_key, config.action_key, config.task_key] if key not in sample
     ]
     if missing:
         raise KeyError(f"Sample is missing required key(s): {missing}")
@@ -1477,7 +1473,9 @@ def sample_to_training_item(sample: Mapping[str, Any], config: DatasetConfig) ->
         action_mask = action_valid[config.idm_history_length :]
     else:
         state = first_vector(sample[config.state_key], name=config.state_key)
-        action_chunk = temporal_vectors(sample[config.action_key], name=config.action_key, horizon=config.action_horizon)
+        action_chunk = temporal_vectors(
+            sample[config.action_key], name=config.action_key, horizon=config.action_horizon
+        )
         prev_state_history = None
         prev_action_history = None
         history_mask = None

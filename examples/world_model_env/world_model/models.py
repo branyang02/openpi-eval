@@ -52,13 +52,11 @@ def _validate_history(
     expected_action = (history_length, action_dim)
     if prev_state_history.ndim != 3 or tuple(prev_state_history.shape[1:]) != expected_state:
         raise ValueError(
-            "prev_state_history must have shape "
-            f"(B, {expected_state}), got {tuple(prev_state_history.shape)}."
+            "prev_state_history must have shape " f"(B, {expected_state}), got {tuple(prev_state_history.shape)}."
         )
     if prev_action_history.ndim != 3 or tuple(prev_action_history.shape[1:]) != expected_action:
         raise ValueError(
-            "prev_action_history must have shape "
-            f"(B, {expected_action}), got {tuple(prev_action_history.shape)}."
+            "prev_action_history must have shape " f"(B, {expected_action}), got {tuple(prev_action_history.shape)}."
         )
     if tuple(prev_action_history.shape[:2]) != tuple(prev_state_history.shape[:2]):
         raise ValueError(
@@ -67,8 +65,7 @@ def _validate_history(
         )
     if history_mask.ndim != 2 or tuple(history_mask.shape) != tuple(prev_state_history.shape[:2]):
         raise ValueError(
-            "history_mask must have shape "
-            f"{tuple(prev_state_history.shape[:2])}, got {tuple(history_mask.shape)}."
+            "history_mask must have shape " f"{tuple(prev_state_history.shape[:2])}, got {tuple(history_mask.shape)}."
         )
 
 
@@ -448,8 +445,7 @@ class WanVaeTransitionEncoder(nn.Module):
     def _encode_images(self, current_images: torch.Tensor, future_images: torch.Tensor) -> torch.Tensor:
         if self.wan_encoder is None:
             raise ValueError(
-                "wan_vae_latents are required because this IDM was configured with "
-                "wan_vae_use_cached_latents=True."
+                "wan_vae_latents are required because this IDM was configured with " "wan_vae_use_cached_latents=True."
             )
         video = self._video_from_images(current_images, future_images)
         with torch.no_grad():
@@ -505,7 +501,9 @@ class WanVaeTransitionEncoder(nn.Module):
         tokens = latents.permute(0, 2, 3, 4, 1).reshape(batch_size, self.num_latent_tokens, -1)
         projected_tokens = self.latent_projection(tokens.to(dtype=self.latent_projection.weight.dtype))
         tokens = projected_tokens
-        time_ids = torch.arange(self.latent_frames, device=device).repeat_interleave(self.latent_side * self.latent_side)
+        time_ids = torch.arange(self.latent_frames, device=device).repeat_interleave(
+            self.latent_side * self.latent_side
+        )
         spatial_ids = torch.arange(self.latent_side * self.latent_side, device=device).repeat(self.latent_frames)
         type_ids = (time_ids > 0).long()
         tokens = tokens + self.time_embedding(time_ids).unsqueeze(0)
@@ -631,9 +629,7 @@ class FlowActionTransformerHead(nn.Module):
         if config.idm_flow_context_conditioning not in ("token", "additive"):
             raise ValueError("idm_flow_context_conditioning must be one of {'token', 'additive'}.")
         if config.idm_flow_visual_token_conditioning_mode not in ("prefix", "cross_attention"):
-            raise ValueError(
-                "idm_flow_visual_token_conditioning_mode must be one of {'prefix', 'cross_attention'}."
-            )
+            raise ValueError("idm_flow_visual_token_conditioning_mode must be one of {'prefix', 'cross_attention'}.")
         self.config = config
         self.context_conditioning = config.idm_flow_context_conditioning
         self.visual_token_conditioning_mode = config.idm_flow_visual_token_conditioning_mode
@@ -690,7 +686,9 @@ class FlowActionTransformerHead(nn.Module):
         if history_tokens is not None:
             expected_history = (batch_size, self.config.idm_history_length, self.config.latent_dim)
             if history_tokens.ndim != 3 or tuple(history_tokens.shape) != expected_history:
-                raise ValueError(f"history_tokens must have shape {expected_history}, got {tuple(history_tokens.shape)}.")
+                raise ValueError(
+                    f"history_tokens must have shape {expected_history}, got {tuple(history_tokens.shape)}."
+                )
         if visual_context_tokens is not None:
             if visual_context_tokens.ndim != 3:
                 raise ValueError(
@@ -769,7 +767,9 @@ class FlowContextActionHead(nn.Module):
         if history_tokens is not None:
             expected_history = (context.shape[0], self.config.idm_history_length, self.config.latent_dim)
             if history_tokens.ndim != 3 or tuple(history_tokens.shape) != expected_history:
-                raise ValueError(f"history_tokens must have shape {expected_history}, got {tuple(history_tokens.shape)}.")
+                raise ValueError(
+                    f"history_tokens must have shape {expected_history}, got {tuple(history_tokens.shape)}."
+                )
             context = context + history_tokens.mean(dim=1)
         horizon = self.horizon_embedding(torch.arange(self.config.action_horizon, device=context.device))
         tokens = context.unsqueeze(1) + horizon.view(1, self.config.action_horizon, -1)
@@ -939,9 +939,7 @@ class InverseDynamicsModel(nn.Module):
                 wan_vae_latents=wan_vae_latents,
             ), None
         if self.config.idm_visual_encoder != "wan_vae" and wan_vae_latents is not None:
-            raise ValueError(
-                "wan_vae_latents were provided, but this IDM is not using idm_visual_encoder='wan_vae'."
-            )
+            raise ValueError("wan_vae_latents were provided, but this IDM is not using idm_visual_encoder='wan_vae'.")
         current_images, state, wan_vae_latents = self._future_only_inputs(
             current_images,
             state,
@@ -1319,11 +1317,14 @@ class InverseDynamicsModel(nn.Module):
                     dtype=current_images.dtype,
                 )
             else:
-                action = torch.randn(
-                    expected_noise_shape,
-                    device=current_images.device,
-                    dtype=current_images.dtype,
-                ) * noise_scale
+                action = (
+                    torch.randn(
+                        expected_noise_shape,
+                        device=current_images.device,
+                        dtype=current_images.dtype,
+                    )
+                    * noise_scale
+                )
         else:
             _validate_action_chunk(
                 sample_noise,
@@ -1332,7 +1333,9 @@ class InverseDynamicsModel(nn.Module):
                 name="sample_noise",
             )
             if tuple(sample_noise.shape) != expected_noise_shape:
-                raise ValueError(f"sample_noise must have shape {expected_noise_shape}, got {tuple(sample_noise.shape)}.")
+                raise ValueError(
+                    f"sample_noise must have shape {expected_noise_shape}, got {tuple(sample_noise.shape)}."
+                )
             action = sample_noise.to(device=current_images.device, dtype=current_images.dtype)
         context, visual_context_tokens = self._transition_context_and_visual_tokens(
             current_images,

@@ -151,9 +151,7 @@ class WanKVShape:
         num_heads = _positive_int(self.num_heads, name="num_heads")
         head_dim = _positive_int(self.head_dim, name="head_dim")
         if model_dim != num_heads * head_dim:
-            raise ValueError(
-                f"model_dim must equal num_heads * head_dim, got {model_dim} != {num_heads} * {head_dim}."
-            )
+            raise ValueError(f"model_dim must equal num_heads * head_dim, got {model_dim} != {num_heads} * {head_dim}.")
         object.__setattr__(self, "batch_size", batch_size)
         object.__setattr__(self, "token_count", token_count)
         object.__setattr__(self, "model_dim", model_dim)
@@ -192,20 +190,18 @@ def validate_kv_tensors(
     layout = _coerce_layout(layout)
     num_heads = _positive_int(num_heads, name="num_heads")
     if model_dim is not None and head_dim is not None and model_dim != num_heads * head_dim:
-        raise ValueError(
-            f"model_dim must equal num_heads * head_dim, got {model_dim} != {num_heads} * {head_dim}."
-        )
+        raise ValueError(f"model_dim must equal num_heads * head_dim, got {model_dim} != {num_heads} * {head_dim}.")
     if key.shape != value.shape:
         raise ValueError(f"{name} key shape {tuple(key.shape)} must match value shape {tuple(value.shape)}.")
 
     if layout == WanKVLayout.DIFFSYNTH_PROJECTED:
         if key.ndim != 3:
-            raise ValueError(f"{name} tensors with layout 'bsd' must have shape (B, tokens, dim), got {tuple(key.shape)}.")
+            raise ValueError(
+                f"{name} tensors with layout 'bsd' must have shape (B, tokens, dim), got {tuple(key.shape)}."
+            )
         actual_batch_size, actual_token_count, actual_model_dim = key.shape
         if actual_model_dim % num_heads != 0:
-            raise ValueError(
-                f"{name} model_dim {actual_model_dim} must be divisible by num_heads {num_heads}."
-            )
+            raise ValueError(f"{name} model_dim {actual_model_dim} must be divisible by num_heads {num_heads}.")
         actual_head_dim = actual_model_dim // num_heads
     elif layout == WanKVLayout.FLASH_ATTN:
         if key.ndim != 4:
@@ -326,7 +322,11 @@ class WanLayerKVCache:
                     f"layer {self.layer_index} attention caches must share batch_size, got "
                     f"{first.batch_size} and {shape.batch_size}."
                 )
-            if shape.model_dim != first.model_dim or shape.num_heads != first.num_heads or shape.head_dim != first.head_dim:
+            if (
+                shape.model_dim != first.model_dim
+                or shape.num_heads != first.num_heads
+                or shape.head_dim != first.head_dim
+            ):
                 raise ValueError(
                     f"layer {self.layer_index} attention caches must share model/head dimensions, got "
                     f"{first} and {shape}."
@@ -370,7 +370,11 @@ class WanPrefixKVCache:
                     raise ValueError(
                         f"all prefix KV layers must share batch_size, got {first.batch_size} and {shape.batch_size}."
                     )
-                if shape.model_dim != first.model_dim or shape.num_heads != first.num_heads or shape.head_dim != first.head_dim:
+                if (
+                    shape.model_dim != first.model_dim
+                    or shape.num_heads != first.num_heads
+                    or shape.head_dim != first.head_dim
+                ):
                     raise ValueError(f"all prefix KV layers must share model/head dimensions, got {first} and {shape}.")
 
     def iter_attention_caches(self) -> Iterator[WanAttentionKVCache]:
@@ -651,7 +655,9 @@ class WanCacheAwareAttentionAdapter:
             actual = sorted(dependency.value for dependency in cache.dependencies)
             raise ValueError(f"emitted cache dependencies {actual} must match adapter dependencies {expected}.")
         if cache.layout != self.layout:
-            raise ValueError(f"emitted cache layout {cache.layout.value} must match adapter layout {self.layout.value}.")
+            raise ValueError(
+                f"emitted cache layout {cache.layout.value} must match adapter layout {self.layout.value}."
+            )
         if cache.num_heads != self.num_heads:
             raise ValueError(f"emitted cache num_heads {cache.num_heads} must match adapter {self.num_heads}.")
         if self.layer_index is not None and cache.layer_index != self.layer_index:
@@ -754,7 +760,9 @@ def select_attention_cache_for_wrapper(
     if not matches:
         layer_index = getattr(wrapper, "layer_index", None)
         layer_label = "any layer" if layer_index is None else f"layer {layer_index}"
-        raise ValueError(f"prefix cache does not contain {wrapper.attention_kind.value}-attention KV for {layer_label}.")
+        raise ValueError(
+            f"prefix cache does not contain {wrapper.attention_kind.value}-attention KV for {layer_label}."
+        )
     if len(matches) > 1:
         raise ValueError(
             f"prefix cache contains {len(matches)} {wrapper.attention_kind.value}-attention KV entries; "
@@ -794,7 +802,9 @@ def is_timestep_noise_dependent_cache(cache: WanAttentionKVCache) -> bool:
     return is_timestep_noise_dependent_dependencies(cache.dependencies)
 
 
-def static_current_image_text_attention_slots(prefix_cache: WanPrefixKVCache) -> tuple[tuple[int, WanAttentionKind], ...]:
+def static_current_image_text_attention_slots(
+    prefix_cache: WanPrefixKVCache,
+) -> tuple[tuple[int, WanAttentionKind], ...]:
     return tuple(
         (cache.layer_index if cache.layer_index is not None else layer.layer_index, cache.attention_kind)
         for layer in prefix_cache.layers
@@ -817,11 +827,15 @@ def validate_action_tokens_against_prefix_cache(action_tokens: torch.Tensor, pre
         raise ValueError(f"action_tokens must have shape (B, action_tokens, dim), got {tuple(action_tokens.shape)}.")
     batch_size, token_count, model_dim = action_tokens.shape
     if batch_size != prefix_cache.batch_size:
-        raise ValueError(f"action_tokens batch size {batch_size} must match prefix KV batch size {prefix_cache.batch_size}.")
+        raise ValueError(
+            f"action_tokens batch size {batch_size} must match prefix KV batch size {prefix_cache.batch_size}."
+        )
     if token_count <= 0:
         raise ValueError(f"action_tokens must contain at least one token, got {token_count}.")
     if model_dim != prefix_cache.model_dim:
-        raise ValueError(f"action_tokens model dim {model_dim} must match prefix KV model dim {prefix_cache.model_dim}.")
+        raise ValueError(
+            f"action_tokens model dim {model_dim} must match prefix KV model dim {prefix_cache.model_dim}."
+        )
 
 
 @runtime_checkable

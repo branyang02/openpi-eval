@@ -214,13 +214,16 @@ class _FakeWanPrefixEncoder:
         prompt_signal = torch.tensor([len(prompt) for prompt in prompts], device=current_images.device).view(
             batch_size, 1, 1
         )
-        return torch.ones(
-            batch_size,
-            self.num_tokens,
-            self.prefix_dim,
-            device=current_images.device,
-            dtype=torch.float32,
-        ) * prompt_signal
+        return (
+            torch.ones(
+                batch_size,
+                self.num_tokens,
+                self.prefix_dim,
+                device=current_images.device,
+                dtype=torch.float32,
+            )
+            * prompt_signal
+        )
 
 
 def _tiny_wan_action_expert_kwargs(**overrides) -> dict[str, object]:
@@ -423,9 +426,7 @@ def test_future_provider_kwargs_from_args_includes_wan_lora_prompt_template_and_
 
 
 @pytest.mark.parametrize("prompt_template", ["", "   ", "Robot task"])
-def test_build_future_provider_rejects_invalid_wan_lora_prompt_template(
-    monkeypatch, tmp_path, prompt_template
-) -> None:
+def test_build_future_provider_rejects_invalid_wan_lora_prompt_template(monkeypatch, tmp_path, prompt_template) -> None:
     class UnusedDiffSynthWanLoraFutureGenerator:
         def __init__(self, config):
             del config

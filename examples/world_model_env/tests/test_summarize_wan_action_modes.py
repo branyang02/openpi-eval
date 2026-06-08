@@ -30,8 +30,7 @@ def test_list_modes_renders_contract_table() -> None:
     )
     assert (
         "| `partial_wan_prefix_action_expert` | hybrid Wan future latents/memory -> action expert | yes | no | no | "
-        "yes | no |"
-        in rendered
+        "yes | no |" in rendered
     )
 
 

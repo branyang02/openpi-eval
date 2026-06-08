@@ -82,8 +82,7 @@ def _normalize_action_loss_weighting(weighting: str) -> ActionLossWeighting:
 def _normalize_action_loss_aggregation(aggregation: str) -> ActionLossAggregation:
     if aggregation not in {"mean", "task_balanced", "task_cvar"}:
         raise ValueError(
-            "action_loss_aggregation must be 'mean', 'task_balanced', or 'task_cvar', "
-            f"got {aggregation!r}."
+            "action_loss_aggregation must be 'mean', 'task_balanced', or 'task_cvar', " f"got {aggregation!r}."
         )
     return aggregation  # type: ignore[return-value]
 
@@ -156,9 +155,7 @@ def _task_mean_losses(loss_numerator: torch.Tensor, loss_count: torch.Tensor, ta
     if loss_numerator.ndim != 1:
         raise ValueError(f"loss_numerator must have shape (B,), got {tuple(loss_numerator.shape)}.")
     if tuple(loss_count.shape) != tuple(loss_numerator.shape):
-        raise ValueError(
-            f"loss_count must have shape {tuple(loss_numerator.shape)}, got {tuple(loss_count.shape)}."
-        )
+        raise ValueError(f"loss_count must have shape {tuple(loss_numerator.shape)}, got {tuple(loss_count.shape)}.")
     if len(tasks) != loss_numerator.shape[0]:
         raise ValueError(
             "Task-balanced action loss requires exactly one task label per per-sample loss; "
@@ -541,9 +538,7 @@ def _evaluate(
                     random_predicted_model_space, action_norm_by_task, batch["task"]
                 )
             else:
-                random_predicted = _unnormalize_actions(
-                    random_predicted_model_space, action_norm_mean, action_norm_std
-                )
+                random_predicted = _unnormalize_actions(random_predicted_model_space, action_norm_mean, action_norm_std)
             batch_random_squared_error, batch_random_count = _masked_squared_error_sums(
                 random_predicted, actions, batch["action_mask"]
             )
@@ -664,18 +659,16 @@ def _validate_init_checkpoint_model_kwargs(
         raise ValueError(f"Init checkpoint {checkpoint_path} model_kwargs is missing required key(s): {missing}.")
     mismatches = {}
     for key in _INIT_CHECKPOINT_MODEL_KWARGS:
-        checkpoint_value = (
-            model_kwargs[key]
-            if key in model_kwargs
-            else _INIT_CHECKPOINT_MODEL_KWARGS_DEFAULTS[key]
-        )
+        checkpoint_value = model_kwargs[key] if key in model_kwargs else _INIT_CHECKPOINT_MODEL_KWARGS_DEFAULTS[key]
         if checkpoint_value != expected[key]:
             mismatches[key] = {"checkpoint": checkpoint_value, "current": expected[key]}
     if mismatches:
         raise ValueError(f"Init checkpoint {checkpoint_path} architecture/model_kwargs mismatch: {mismatches}.")
 
 
-def _allclose_or_mismatch(checkpoint_value: Any, current_value: torch.Tensor, *, field: str, checkpoint_path: Path) -> None:
+def _allclose_or_mismatch(
+    checkpoint_value: Any, current_value: torch.Tensor, *, field: str, checkpoint_path: Path
+) -> None:
     checkpoint_tensor = torch.as_tensor(checkpoint_value).detach().cpu().to(dtype=torch.float32)
     current_tensor = current_value.detach().cpu().to(dtype=torch.float32)
     if tuple(checkpoint_tensor.shape) != tuple(current_tensor.shape) or not torch.allclose(

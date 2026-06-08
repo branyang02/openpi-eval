@@ -493,7 +493,9 @@ def compare_wan_latent_caches(args: Args) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
         "reference_cache_dir": str(reference.cache_dir),
-        "generated_cache_dirs": [str(Path(cache_dir).expanduser().resolve()) for cache_dir in args.generated_cache_dirs],
+        "generated_cache_dirs": [
+            str(Path(cache_dir).expanduser().resolve()) for cache_dir in args.generated_cache_dirs
+        ],
         "output_dir": str(output_dir),
         "require_identical_dataset_indices": args.require_identical_dataset_indices,
         "summary_json_path": str(output_dir / "latent_gap_summary.json"),

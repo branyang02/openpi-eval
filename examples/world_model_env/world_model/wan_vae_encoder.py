@@ -134,7 +134,9 @@ class FakeWanVaeEncoder:
             device=videos.device,
             dtype=videos.dtype,
         ).view(1, self.latent_channels, 1, 1, 1)
-        return pooled.expand(batch_size, self.latent_channels, latent_frames, latent_height, latent_width) * channel_scale
+        return (
+            pooled.expand(batch_size, self.latent_channels, latent_frames, latent_height, latent_width) * channel_scale
+        )
 
 
 def build_frozen_wan_vae_encoder(config: ModelConfig) -> FrozenDiffSynthWanVaeEncoder:

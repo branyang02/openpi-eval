@@ -167,7 +167,9 @@ def main(args: Args) -> None:
                 state_normalizer=state_normalizer,
             ),
         )[0]
-        action = model_action if action_normalizer is None else action_normalizer.denormalize(model_action.unsqueeze(0))[0]
+        action = (
+            model_action if action_normalizer is None else action_normalizer.denormalize(model_action.unsqueeze(0))[0]
+        )
 
     output = {
         "prompt": wan_result.prompt,

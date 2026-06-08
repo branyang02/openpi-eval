@@ -836,12 +836,8 @@ def test_diagnose_idm_reports_flow_teacher_forced_metrics_with_masks(tmp_path, m
     assert flow_metrics["normalized_sampled_vs_t0_endpoint_mse"] == pytest.approx((0.0 + 1.0 + 4.0) / 3.0)
     assert flow_metrics["sampled_vs_endpoint_mse"] == pytest.approx((0.0 + 4.0 + 16.0) / 3.0)
     assert set(flow_metrics["future_sensitivity"]) == {"current_repeated", "noise", "shuffled", "zero"}
-    assert flow_metrics["future_sensitivity"]["zero"]["normalized_t0_endpoint_output_delta_mse"] == pytest.approx(
-        0.0
-    )
-    assert flow_metrics["future_sensitivity"]["zero"]["normalized_t0_5_velocity_output_delta_mse"] == pytest.approx(
-        0.0
-    )
+    assert flow_metrics["future_sensitivity"]["zero"]["normalized_t0_endpoint_output_delta_mse"] == pytest.approx(0.0)
+    assert flow_metrics["future_sensitivity"]["zero"]["normalized_t0_5_velocity_output_delta_mse"] == pytest.approx(0.0)
     assert set(flow_metrics["state_sensitivity"]) == {"zero"}
     assert flow_metrics["state_sensitivity"]["zero"]["normalized_t0_5_endpoint_target_mse"] > 0.0
     assert flow_metrics["state_sensitivity"]["zero"]["normalized_t0_5_endpoint_output_delta_mse"] > 0.0

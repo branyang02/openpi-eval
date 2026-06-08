@@ -212,8 +212,7 @@ def test_cache_future_rollouts_rejects_balanced_split_resume_before_dataset_load
         synthetic_samples=8,
     )
     (tmp_path / "manifest.jsonl").write_text(
-        json.dumps({"source": "dataset_future", "dataset_index": 0, "future_tensor": "futures/sample_000000.pt"})
-        + "\n"
+        json.dumps({"source": "dataset_future", "dataset_index": 0, "future_tensor": "futures/sample_000000.pt"}) + "\n"
     )
     (tmp_path / "config.json").write_text(
         json.dumps(
@@ -357,9 +356,7 @@ def test_cache_future_rollouts_can_vary_wan_generation_seed_without_dataset_seed
     assert config["generation_seed"] == 123
 
 
-def test_cache_future_rollouts_rejects_wan_lora_resume_with_different_generation_seed(
-    tmp_path, monkeypatch
-) -> None:
+def test_cache_future_rollouts_rejects_wan_lora_resume_with_different_generation_seed(tmp_path, monkeypatch) -> None:
     class FakeWanLoraGenerator:
         def generate_future_stack(self, current_images, *, task_text, output_dir, image_size, num_future_frames, seed):
             del current_images
@@ -398,9 +395,7 @@ def test_cache_future_rollouts_rejects_wan_lora_resume_with_different_generation
         cache_main(dataclasses.replace(args, generation_seed=456))
 
 
-def test_cache_future_rollouts_rejects_wan_lora_resume_with_different_temporal_contract(
-    tmp_path, monkeypatch
-) -> None:
+def test_cache_future_rollouts_rejects_wan_lora_resume_with_different_temporal_contract(tmp_path, monkeypatch) -> None:
     class FakeWanLoraGenerator:
         def generate_future_stack(self, current_images, *, task_text, output_dir, image_size, num_future_frames, seed):
             del current_images
@@ -1071,8 +1066,7 @@ def test_cached_future_dataset_rejects_samples_per_episode_config_mismatch(tmp_p
     )
     cache_config = dataclasses.asdict(dataclasses.replace(base_config, samples_per_episode=1))
     (tmp_path / "manifest.jsonl").write_text(
-        json.dumps({"source": "dataset_future", "dataset_index": 0, "future_tensor": "futures/sample_000000.pt"})
-        + "\n"
+        json.dumps({"source": "dataset_future", "dataset_index": 0, "future_tensor": "futures/sample_000000.pt"}) + "\n"
     )
     (tmp_path / "config.json").write_text(
         json.dumps({"future_source": "dataset_future", "dataset_config": cache_config}) + "\n"

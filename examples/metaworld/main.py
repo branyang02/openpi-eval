@@ -260,7 +260,9 @@ class IdmHistoryBuffer:
         self.history_mask = np.zeros((self.num_envs, self.history_length), dtype=np.float32)
 
     @classmethod
-    def from_metadata(cls, metadata: dict | None, *, num_envs: int, default_state_dim: int = 4) -> "IdmHistoryBuffer | None":
+    def from_metadata(
+        cls, metadata: dict | None, *, num_envs: int, default_state_dim: int = 4
+    ) -> "IdmHistoryBuffer | None":
         history_length = _metadata_int(metadata, "idm_history_length", 0)
         if history_length <= 0:
             return None
@@ -388,7 +390,9 @@ def run_episode(
     camera_views = info["cameras"]
     num_envs = env.num_envs
     idm_history = IdmHistoryBuffer.from_metadata(policy_metadata, num_envs=num_envs)
-    policy_state_dim = idm_history.state_dim if idm_history is not None else _metadata_int(policy_metadata, "state_dim", 4)
+    policy_state_dim = (
+        idm_history.state_dim if idm_history is not None else _metadata_int(policy_metadata, "state_dim", 4)
+    )
     success = np.zeros(num_envs, dtype=bool)
     total_reward = np.zeros(num_envs)
     action_plan: collections.deque = collections.deque()

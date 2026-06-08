@@ -122,8 +122,7 @@ class ModelConfig:
             raise ValueError("idm_history_length is supported only with idm_arch='flow_transformer'.")
         if self.idm_flow_sample_noise_scale < 0.0:
             raise ValueError(
-                "idm_flow_sample_noise_scale must be non-negative, "
-                f"got {self.idm_flow_sample_noise_scale}."
+                "idm_flow_sample_noise_scale must be non-negative, " f"got {self.idm_flow_sample_noise_scale}."
             )
         if self.idm_flow_context_conditioning not in ("token", "additive"):
             raise ValueError(
@@ -181,8 +180,7 @@ class ModelConfig:
         if self.idm_flow_visual_token_conditioning:
             if self.idm_future_conditioning == "current_only":
                 raise ValueError(
-                    "idm_flow_visual_token_conditioning cannot be used with "
-                    "idm_future_conditioning='current_only'."
+                    "idm_flow_visual_token_conditioning cannot be used with " "idm_future_conditioning='current_only'."
                 )
             if self.idm_arch != "flow_transformer":
                 raise ValueError(
@@ -196,13 +194,11 @@ class ModelConfig:
         if self.idm_flow_visual_token_scope == "future_only":
             if not self.idm_flow_visual_token_conditioning:
                 raise ValueError(
-                    "idm_flow_visual_token_scope='future_only' requires "
-                    "idm_flow_visual_token_conditioning=True."
+                    "idm_flow_visual_token_scope='future_only' requires " "idm_flow_visual_token_conditioning=True."
                 )
             if self.idm_arch != "flow_transformer":
                 raise ValueError(
-                    "idm_flow_visual_token_scope='future_only' is supported only with "
-                    "idm_arch='flow_transformer'."
+                    "idm_flow_visual_token_scope='future_only' is supported only with " "idm_arch='flow_transformer'."
                 )
             if self.idm_visual_encoder not in ("patch", "wan_vae"):
                 raise ValueError(
@@ -436,9 +432,7 @@ class TrainConfig:
         if self.idm_future_usage_eval and self.model.idm_arch != "flow_transformer":
             raise ValueError("idm_future_usage_eval is supported only with idm_arch='flow_transformer'.")
         if self.idm_same_task_future_delta_weight > 0.0 and self.model.idm_arch != "flow_transformer":
-            raise ValueError(
-                "idm_same_task_future_delta_weight is supported only with idm_arch='flow_transformer'."
-            )
+            raise ValueError("idm_same_task_future_delta_weight is supported only with idm_arch='flow_transformer'.")
         ranking_negatives_enabled = (
             self.idm_future_ranking_repeated_current_negative
             or self.idm_future_ranking_shuffled_future_negative

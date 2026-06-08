@@ -208,7 +208,9 @@ def _resolve_explicit_modes(paths: list[Path], modes: list[str] | None) -> list[
     if len(modes) == 1:
         return modes * len(paths)
     if len(modes) != len(paths):
-        raise ValueError(f"--mode must be passed once or once per result path; got {len(modes)} modes for {len(paths)} paths")
+        raise ValueError(
+            f"--mode must be passed once or once per result path; got {len(modes)} modes for {len(paths)} paths"
+        )
     return modes
 
 
@@ -226,7 +228,9 @@ def load_results(paths: list[str | Path], modes: list[str] | None = None) -> tup
                 spec=get_action_mode_spec(mode),
                 mse=_first_present(data, MSE_KEYS),
                 per_dim_mse=_first_present(data, PER_DIM_MSE_KEYS),
-                decoder_arch=extract_decoder_arch(data, path, follow_checkpoint=mode != WanActionMode.DECODED_VIDEO_IDM),
+                decoder_arch=extract_decoder_arch(
+                    data, path, follow_checkpoint=mode != WanActionMode.DECODED_VIDEO_IDM
+                ),
                 path=path,
             )
         )
@@ -289,7 +293,9 @@ def main(argv: list[str] | None = None, *, out: TextIO | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        rendered = render_contract_table() if args.list_modes else render_result_table(load_results(args.results, args.mode))
+        rendered = (
+            render_contract_table() if args.list_modes else render_result_table(load_results(args.results, args.mode))
+        )
     except ValueError as exc:
         parser.error(str(exc))
 

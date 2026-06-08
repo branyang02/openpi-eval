@@ -60,7 +60,9 @@ def video_num_frames(video_path: Path) -> int:
     return sum(1 for _ in iio.imiter(video_path))
 
 
-def validate_dataset(dataset_dir: Path, metadata_filename: str, expected_num_frames: int, validate_videos: bool) -> dict:
+def validate_dataset(
+    dataset_dir: Path, metadata_filename: str, expected_num_frames: int, validate_videos: bool
+) -> dict:
     metadata_path = dataset_dir / metadata_filename
     rows = read_metadata(metadata_path)
     checked_videos = 0

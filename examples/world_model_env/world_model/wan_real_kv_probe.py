@@ -46,9 +46,7 @@ def _coerce_attention_kind(kind: WanAttentionKind | str | None, *, module: Any) 
         return WanAttentionKind.CROSS
     if "self" in class_name:
         return WanAttentionKind.SELF
-    raise ValueError(
-        "attention_kind is required when the module class name does not contain 'Self' or 'Cross'."
-    )
+    raise ValueError("attention_kind is required when the module class name does not contain 'Self' or 'Cross'.")
 
 
 def _positive_int(value: Any, *, name: str) -> int:
@@ -286,9 +284,7 @@ def emit_projected_wan_kv(
     kind = _coerce_attention_kind(attention_kind, module=module)
     resolved_num_heads = _module_num_heads(module, num_heads)
     resolved_dependencies = (
-        _default_dependencies(kind)
-        if dependencies is None
-        else normalize_kv_dependencies(dependencies)
+        _default_dependencies(kind) if dependencies is None else normalize_kv_dependencies(dependencies)
     )
 
     if kind == WanAttentionKind.SELF:
@@ -399,9 +395,7 @@ def adapt_wan_projection_module(
     kind = _coerce_attention_kind(attention_kind, module=module)
     resolved_num_heads = _module_num_heads(module, num_heads)
     resolved_dependencies = (
-        _default_dependencies(kind)
-        if dependencies is None
-        else normalize_kv_dependencies(dependencies)
+        _default_dependencies(kind) if dependencies is None else normalize_kv_dependencies(dependencies)
     )
     backend = _ProjectedKVBackend(
         module=module,

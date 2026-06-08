@@ -102,9 +102,7 @@ def test_inspect_alignment_summarizes_fake_lerobot_delta_sample() -> None:
         "corner.image"
     ] == pytest.approx([0.0, 0.15, 0.3])
     assert summary["action_horizon_contract"]["source_action_offsets"] == [0, 1, 2, 3]
-    assert summary["action_horizon_contract"]["delta_timestamps_seconds"] == pytest.approx(
-        [0.0, 0.05, 0.1, 0.15]
-    )
+    assert summary["action_horizon_contract"]["delta_timestamps_seconds"] == pytest.approx([0.0, 0.05, 0.1, 0.15])
     assert summary["shapes"]["future_images"] == [2, 2, 3, 8, 8]
     assert summary["raw_shapes"]["actions"] == [4, 2]
 

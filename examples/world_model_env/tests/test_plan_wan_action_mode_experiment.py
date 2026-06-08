@@ -126,10 +126,7 @@ def test_main_defaults_use_existing_matched_eval_checkpoints() -> None:
     one_line = _one_line(rendered)
     assert status == 0
     assert "planned_samples=256" in rendered
-    assert (
-        "--checkpoint output/idm_flow_patch_decoded_wan_smoke_ep0_15_h4/best_idm_checkpoint.pt"
-        in one_line
-    )
+    assert "--checkpoint output/idm_flow_patch_decoded_wan_smoke_ep0_15_h4/best_idm_checkpoint.pt" in one_line
     assert (
         "--checkpoint "
         "output/pi05_wan_action_expert_dit_train2_eval1_spe4_h4_prefixonly_norm_seed109_e300_h512_l6/checkpoint.pt"

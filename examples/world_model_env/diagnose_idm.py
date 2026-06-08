@@ -489,7 +489,9 @@ def future_sensitivity_gate(
 @torch.no_grad()
 def main(args: Args) -> None:
     if args.cached_future_dir is not None and args.wan_vae_latent_cache_dir is not None:
-        raise ValueError("--wan-vae-latent-cache-dir uses real dataset futures and cannot be combined with cached futures.")
+        raise ValueError(
+            "--wan-vae-latent-cache-dir uses real dataset futures and cannot be combined with cached futures."
+        )
     seed_everything(args.seed)
     device = resolve_device(args.device)
     idm, model_config = load_idm_checkpoint(
@@ -857,9 +859,7 @@ def main(args: Args) -> None:
             sensitivity_totals[variant_name]["target_mse_sum"] += float(variant_mse_sum.detach().cpu())
             sensitivity_totals[variant_name]["target_mse_count"] += float(variant_mse_count.detach().cpu())
             sensitivity_totals[variant_name]["target_smooth_l1_sum"] += float(variant_smooth_l1_sum.detach().cpu())
-            sensitivity_totals[variant_name]["target_smooth_l1_count"] += float(
-                variant_smooth_l1_count.detach().cpu()
-            )
+            sensitivity_totals[variant_name]["target_smooth_l1_count"] += float(variant_smooth_l1_count.detach().cpu())
             sensitivity_totals[variant_name]["output_delta_mse_sum"] += float(delta_mse_sum.detach().cpu())
             sensitivity_totals[variant_name]["output_delta_mse_count"] += float(delta_mse_count.detach().cpu())
             if flow_probes is not None:
@@ -958,9 +958,7 @@ def main(args: Args) -> None:
         if "normalized_t0_5_velocity_mse" in flow_teacher_forced:
             flow_teacher_forced["normalized_velocity_mse"] = flow_teacher_forced["normalized_t0_5_velocity_mse"]
         if "denormalized_t0_5_endpoint_mse" in flow_teacher_forced:
-            flow_teacher_forced["denormalized_endpoint_mse"] = flow_teacher_forced[
-                "denormalized_t0_5_endpoint_mse"
-            ]
+            flow_teacher_forced["denormalized_endpoint_mse"] = flow_teacher_forced["denormalized_t0_5_endpoint_mse"]
         if "denormalized_sampled_vs_t0_5_endpoint_mse" in flow_teacher_forced:
             flow_teacher_forced["sampled_vs_endpoint_mse"] = flow_teacher_forced[
                 "denormalized_sampled_vs_t0_5_endpoint_mse"

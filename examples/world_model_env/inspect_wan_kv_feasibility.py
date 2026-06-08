@@ -282,11 +282,7 @@ def _projection_assignment_summaries(
 def _returns_key_value_tensors(function: ast.FunctionDef | ast.AsyncFunctionDef | None) -> bool:
     if function is None:
         return False
-    return any(
-        _return_contains_key_value(node.value)
-        for node in ast.walk(function)
-        if isinstance(node, ast.Return)
-    )
+    return any(_return_contains_key_value(node.value) for node in ast.walk(function) if isinstance(node, ast.Return))
 
 
 def _find_method(class_node: ast.ClassDef, method_name: str) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
@@ -540,7 +536,9 @@ def build_conclusion(
     forward_kv_available = _forward_kv_available(attention_modules)
     return {
         "recommended_current_mode": "hidden_prefix",
-        "true_kv_feasibility": "not_available_in_current_path" if not forward_kv_available else "source_exposes_some_kv_hooks",
+        "true_kv_feasibility": "not_available_in_current_path"
+        if not forward_kv_available
+        else "source_exposes_some_kv_hooks",
         "summary": (
             "DiffSynth Wan SelfAttention/CrossAttention compute q/k/v internally but their public forward paths "
             "do not return key/value tensors; this repo currently captures pooled DiT hidden states via "
@@ -567,9 +565,13 @@ def build_probe_report(
     """Build a reproducible Wan KV feasibility report without loading model weights."""
 
     if not cheap:
-        raise ValueError("Only cheap source probing is implemented; model/pipeline weight loading is intentionally absent.")
+        raise ValueError(
+            "Only cheap source probing is implemented; model/pipeline weight loading is intentionally absent."
+        )
 
-    resolved_script_dir = Path(script_dir).expanduser().resolve() if script_dir is not None else Path(__file__).resolve().parent
+    resolved_script_dir = (
+        Path(script_dir).expanduser().resolve() if script_dir is not None else Path(__file__).resolve().parent
+    )
     source_path = resolve_wan_dit_source(
         diffsynth_repo_dir=diffsynth_repo_dir,
         source_path=wan_dit_source_path,

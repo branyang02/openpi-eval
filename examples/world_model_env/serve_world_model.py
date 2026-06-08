@@ -262,9 +262,7 @@ class WanLoraFutureProvider:
         if prompts is None:
             raise ValueError("future_provider='wan_lora' requires observation prompt text.")
         if len(prompts) != batch_size:
-            raise ValueError(
-                f"future_provider='wan_lora' requires {batch_size} prompt(s), got {len(prompts)}."
-            )
+            raise ValueError(f"future_provider='wan_lora' requires {batch_size} prompt(s), got {len(prompts)}.")
         if any(not prompt.strip() for prompt in prompts):
             raise ValueError("future_provider='wan_lora' requires non-empty prompt text.")
 
@@ -455,9 +453,7 @@ def _parse_supplied_idm_history(
     if not any(present):
         return None
     if history_length == 0:
-        raise ValueError(
-            "Observation supplied IDM history tensors, but this model has idm_history_length=0."
-        )
+        raise ValueError("Observation supplied IDM history tensors, but this model has idm_history_length=0.")
     if not all(present):
         missing = [key for key, is_present in zip(IDM_HISTORY_KEYS, present, strict=True) if not is_present]
         raise ValueError(f"Observation IDM history is missing required key(s): {missing}.")
@@ -524,12 +520,10 @@ def _normalize_prompts(value: Any, batch_size: int) -> list[str] | None:
         prompts = [str(item) for item in value]
     except TypeError as exc:
         raise ValueError(
-            f'Observation prompt must be a string or a sequence with length {batch_size}, got {type(value).__name__}.'
+            f"Observation prompt must be a string or a sequence with length {batch_size}, got {type(value).__name__}."
         ) from exc
     if len(prompts) != batch_size:
-        raise ValueError(
-            f"Observation prompt sequence length ({len(prompts)}) must match batch size ({batch_size})."
-        )
+        raise ValueError(f"Observation prompt sequence length ({len(prompts)}) must match batch size ({batch_size}).")
     return prompts
 
 
@@ -742,9 +736,7 @@ class WorldModelPolicy:
         self.future_provider = future_provider or RepeatCurrentFutureProvider()
         self.future_provider_name = _future_provider_name(self.future_provider)
         self._needs_live_wan_vae_latents = _needs_live_wan_vae_latents(model_config)
-        self._wan_vae_encoder = (
-            build_frozen_wan_vae_encoder(model_config) if self._needs_live_wan_vae_latents else None
-        )
+        self._wan_vae_encoder = build_frozen_wan_vae_encoder(model_config) if self._needs_live_wan_vae_latents else None
         self.action_normalizer = action_normalizer.to(self.device) if action_normalizer is not None else None
         self.state_normalizer = state_normalizer.to(self.device) if state_normalizer is not None else None
         self.flow_seed = flow_seed
@@ -774,8 +766,7 @@ class WorldModelPolicy:
         latents = self._wan_vae_encoder.encode_videos(video)
         if not isinstance(latents, torch.Tensor):
             raise TypeError(
-                "Wan VAE encoder encode_videos must return a torch.Tensor, "
-                f"got {type(latents).__name__}."
+                "Wan VAE encoder encode_videos must return a torch.Tensor, " f"got {type(latents).__name__}."
             )
         return latents.to(device=self.device, dtype=torch.float32)
 
@@ -1135,8 +1126,7 @@ class WanPrefixActionExpertPolicy:
     def _validate_prefix_tokens(self, prefix_tokens: Any, *, batch_size: int) -> torch.Tensor:
         if not isinstance(prefix_tokens, torch.Tensor):
             raise TypeError(
-                "Wan prefix encoder encode_prefix must return a torch.Tensor, "
-                f"got {type(prefix_tokens).__name__}."
+                "Wan prefix encoder encode_prefix must return a torch.Tensor, " f"got {type(prefix_tokens).__name__}."
             )
         expected_prefix_dim = self.action_expert.prefix_dim
         if prefix_tokens.ndim != 3:
@@ -1145,9 +1135,7 @@ class WanPrefixActionExpertPolicy:
                 f"got {tuple(prefix_tokens.shape)}."
             )
         if prefix_tokens.shape[0] != batch_size:
-            raise ValueError(
-                f"Wan prefix encoder returned batch size {prefix_tokens.shape[0]}, expected {batch_size}."
-            )
+            raise ValueError(f"Wan prefix encoder returned batch size {prefix_tokens.shape[0]}, expected {batch_size}.")
         if prefix_tokens.shape[1] <= 0:
             raise ValueError("Wan prefix encoder must return at least one prefix token.")
         if prefix_tokens.shape[2] != expected_prefix_dim:

@@ -61,9 +61,7 @@ class _MetricAccumulator:
                 f"prediction shape {tuple(prediction.shape)} must match target shape {tuple(target.shape)}."
             )
         if action_mask.ndim != 1 or int(action_mask.shape[0]) != int(target.shape[0]):
-            raise ValueError(
-                f"action_mask must have shape ({target.shape[0]},), got {tuple(action_mask.shape)}."
-            )
+            raise ValueError(f"action_mask must have shape ({target.shape[0]},), got {tuple(action_mask.shape)}.")
 
         prediction = prediction.detach().cpu().to(dtype=torch.float64)
         target = target.detach().cpu().to(dtype=torch.float64)
@@ -186,7 +184,9 @@ def _load_row(path: Path) -> CacheRow:
     if actions.ndim != 2:
         raise ValueError(f"actions in {path} must have shape (H, A), got {tuple(actions.shape)}.")
     if int(action_mask.shape[0]) != int(actions.shape[0]):
-        raise ValueError(f"action_mask in {path} must have shape ({actions.shape[0]},), got {tuple(action_mask.shape)}.")
+        raise ValueError(
+            f"action_mask in {path} must have shape ({actions.shape[0]},), got {tuple(action_mask.shape)}."
+        )
     if bool((action_mask < 0).any()):
         raise ValueError(f"action_mask in {path} contains negative values.")
 

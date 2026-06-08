@@ -176,9 +176,7 @@ class TestIdmHistoryBuffer:
         assert buffer.history_mask.tolist() == [[0.0, 1.0]]
         buffer.append(np.full((1, 4), 3.0, dtype=np.float32), np.full((1, 4), 4.0, dtype=np.float32))
         assert buffer.history_mask.tolist() == [[1.0, 1.0]]
-        assert buffer.prev_state_history.tolist() == [
-            [[1.0, 1.0, 1.0, 1.0], [3.0, 3.0, 3.0, 3.0]]
-        ]
+        assert buffer.prev_state_history.tolist() == [[[1.0, 1.0, 1.0, 1.0], [3.0, 3.0, 3.0, 3.0]]]
 
         buffer.reset()
 

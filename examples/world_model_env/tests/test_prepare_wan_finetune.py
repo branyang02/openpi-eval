@@ -44,7 +44,9 @@ def test_prepare_wan_finetune_builds_full_training_command(tmp_path) -> None:
 def test_prepare_wan_finetune_accepts_nested_model_paths_json(tmp_path) -> None:
     model_paths = ["/ckpt/text.pth", ["/ckpt/dit-1.safetensors", "/ckpt/dit-2.safetensors"], "/ckpt/vae.pth"]
     command = build_command(
-        Args(dataset_dir=str(tmp_path), model_paths_json=json.dumps(model_paths), tokenizer_path="/ckpt/google/umt5-xxl"),
+        Args(
+            dataset_dir=str(tmp_path), model_paths_json=json.dumps(model_paths), tokenizer_path="/ckpt/google/umt5-xxl"
+        ),
         tmp_path,
     )
 

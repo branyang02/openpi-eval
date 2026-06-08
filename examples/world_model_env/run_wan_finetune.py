@@ -140,9 +140,7 @@ def validate_diffsynth_imports(repo_dir: Path) -> dict[str, object]:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            "DiffSynth import preflight failed.\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            "DiffSynth import preflight failed.\n" f"stdout:\n{result.stdout}\n" f"stderr:\n{result.stderr}"
         )
     return {
         "python": sys.executable,

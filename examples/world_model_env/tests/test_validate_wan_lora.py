@@ -322,9 +322,7 @@ def test_rank_rejects_missing_idm_checkpoint(tmp_path) -> None:
     cache = build_dataset_future_cache(tmp_path / "cache", samples=4, num_future_frames=4, action_horizon=8)
 
     with pytest.raises(FileNotFoundError, match="IDM checkpoint"):
-        validate_ranking_inputs(
-            make_rank_args(tmp_path / "missing.pt", (cache,), tmp_path / "ranking")
-        )
+        validate_ranking_inputs(make_rank_args(tmp_path / "missing.pt", (cache,), tmp_path / "ranking"))
 
 
 def test_rank_rejects_missing_cache_dir(tmp_path) -> None:
@@ -332,9 +330,7 @@ def test_rank_rejects_missing_cache_dir(tmp_path) -> None:
     idm_checkpoint.write_text("stub\n")
 
     with pytest.raises(FileNotFoundError, match="cache directory not found"):
-        validate_ranking_inputs(
-            make_rank_args(idm_checkpoint, (tmp_path / "nope",), tmp_path / "ranking")
-        )
+        validate_ranking_inputs(make_rank_args(idm_checkpoint, (tmp_path / "nope",), tmp_path / "ranking"))
 
 
 def test_rank_rejects_missing_cache_config(tmp_path) -> None:
@@ -353,9 +349,7 @@ def test_rank_rejects_label_count_mismatch(tmp_path) -> None:
     cache = build_dataset_future_cache(tmp_path / "cache", samples=4)
 
     with pytest.raises(ValueError, match="labels"):
-        validate_ranking_inputs(
-            make_rank_args(idm_checkpoint, (cache,), tmp_path / "ranking", labels=("a", "b"))
-        )
+        validate_ranking_inputs(make_rank_args(idm_checkpoint, (cache,), tmp_path / "ranking", labels=("a", "b")))
 
 
 def test_rank_rejects_cache_sample_count_mismatch(tmp_path) -> None:
@@ -468,9 +462,7 @@ def test_rank_rejects_frame_delta_mismatch_with_idm(tmp_path) -> None:
 
     # The IDM was trained for frame_delta=1; ranking with --frame-delta 2 must fail loudly.
     with pytest.raises(ValueError, match="disagrees with the IDM training"):
-        rank_wan_lora_checkpoints(
-            make_rank_args(idm_checkpoint, (cache,), tmp_path / "ranking", frame_delta=2)
-        )
+        rank_wan_lora_checkpoints(make_rank_args(idm_checkpoint, (cache,), tmp_path / "ranking", frame_delta=2))
 
 
 # --- Temporal contract: Wan generated-video indices and source offsets are separate ---

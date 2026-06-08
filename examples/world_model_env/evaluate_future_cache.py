@@ -195,7 +195,11 @@ def _summarize_wan_decode_proofs(per_sample: list[dict[str, Any]]) -> dict[str, 
         float(proof["conditioning_frame_mae"]) for proof in proofs if proof.get("conditioning_frame_mae") is not None
     ]
     frame_counts = sorted(
-        {int(proof["decoded_video_frame_count"]) for proof in proofs if proof.get("decoded_video_frame_count") is not None}
+        {
+            int(proof["decoded_video_frame_count"])
+            for proof in proofs
+            if proof.get("decoded_video_frame_count") is not None
+        }
     )
     selected_indices = sorted(
         {tuple(proof["selected_frame_indices"]) for proof in proofs if proof.get("selected_frame_indices") is not None}
@@ -274,7 +278,9 @@ def write_contact_sheet(
     background = (244, 244, 241)
     for cache_index in cache_indices:
         if not 0 <= cache_index < len(cached_dataset):
-            raise IndexError(f"visual cache index {cache_index} is out of range for cache length {len(cached_dataset)}.")
+            raise IndexError(
+                f"visual cache index {cache_index} is out of range for cache length {len(cached_dataset)}."
+            )
         row = cached_dataset.rows[cache_index]
         dataset_index = int(row["dataset_index"])
         ground_truth_item = base_dataset[dataset_index]
@@ -295,8 +301,7 @@ def write_contact_sheet(
         )
         cached_tiles = [_make_labeled_tile(current, f"s{dataset_index} current", tile_size)]
         cached_tiles.extend(
-            _make_labeled_tile(frame, f"cache t+{offset + 1}", tile_size)
-            for offset, frame in enumerate(cached_futures)
+            _make_labeled_tile(frame, f"cache t+{offset + 1}", tile_size) for offset, frame in enumerate(cached_futures)
         )
         rows.append(_hstack(gt_tiles, gap=4, background=background))
         rows.append(_hstack(cached_tiles, gap=4, background=background))

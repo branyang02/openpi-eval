@@ -13,16 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
-DEFAULT_IDM_CHECKPOINT = (
-    "output/idm_flow_patch_decoded_wan_smoke_ep0_15_h4/best_idm_checkpoint.pt"
-)
+DEFAULT_IDM_CHECKPOINT = "output/idm_flow_patch_decoded_wan_smoke_ep0_15_h4/best_idm_checkpoint.pt"
 DEFAULT_WAN_LORA_PATH = "output/wan_metaworld_ep0_15_1424_128_lora3_e5/epoch-3.safetensors"
 DEFAULT_CURRENT_ACTION_EXPERT_CHECKPOINT = (
     "output/pi05_wan_action_expert_dit_train2_eval1_spe4_h4_prefixonly_norm_seed109_e300_h512_l6/checkpoint.pt"
 )
-DEFAULT_PARTIAL_ACTION_EXPERT_CHECKPOINT = (
-    "output/pi05_wan_partial_action_expert_train2_eval1_spe4_h4_lat2_noise_seed0_prefixonly_norm_seed109_e300_h512_l6/checkpoint.pt"
-)
+DEFAULT_PARTIAL_ACTION_EXPERT_CHECKPOINT = "output/pi05_wan_partial_action_expert_train2_eval1_spe4_h4_lat2_noise_seed0_prefixonly_norm_seed109_e300_h512_l6/checkpoint.pt"
 DEFAULT_EPISODES = (16, 17, 18, 19, 20, 21, 22, 23)
 DEFAULT_DIT_SELECTED_LAYERS = (0, 14, 29)
 DEFAULT_DIT_HIDDEN_POOL_CONFIG = "model_fn_wan_video_block_hooks_mean_pool_selected_layers"
@@ -210,7 +206,9 @@ def _prefix_cache_command(
     )
 
 
-def _prefix_eval_command(config: PlannerConfig, *, checkpoint: str, cache_dir: Path, output_dir: Path) -> tuple[str, ...]:
+def _prefix_eval_command(
+    config: PlannerConfig, *, checkpoint: str, cache_dir: Path, output_dir: Path
+) -> tuple[str, ...]:
     return (
         "uv",
         "run",
@@ -235,8 +233,7 @@ def planned_commands(config: PlannerConfig) -> list[PlannedCommand]:
     planned_sample_count = _planned_sample_count(config)
     if planned_sample_count <= 8:
         raise ValueError(
-            "planned sample count should be larger than the current matched n=8 run, "
-            f"got {planned_sample_count}."
+            "planned sample count should be larger than the current matched n=8 run, " f"got {planned_sample_count}."
         )
     if config.frame_delta != 1:
         raise ValueError("Wan hidden-prefix cache rows currently use DatasetConfig(frame_delta=1); keep frame_delta=1.")
