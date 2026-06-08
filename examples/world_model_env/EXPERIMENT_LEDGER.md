@@ -393,6 +393,20 @@ is **`0.04420376801863313`**.
   -> `48 passed, 1 skipped`; focused `ruff` also passed. No action MSE result is
   claimed yet. Next step is to build a GT-oracle future-latent train/eval cache
   and compare against current-prefix and decoded-video baselines.
+- **GT-oracle future-latent prefix cache materialization (2026-06-08)** The new
+  bridge successfully produced real Wan DiT hidden-prefix caches using cached
+  ground-truth Wan VAE future latents. Train cache:
+  `output/pi05_wan_dit_gt_future_prefix_cache_diverse44_train2_spe4_h4`
+  (`352` rows: 44 tasks, two train episodes/task, four samples/episode). Eval cache:
+  `output/pi05_wan_dit_gt_future_prefix_cache_diverse44_eval2_3_spe2_h4`
+  (`176` rows: 44 tasks, two held-out episodes/task, two samples/episode). Both
+  caches have `prefix_token_count=3`, `prefix_dim=3072`,
+  `contains_future_ground_truth_latents=true`, `future_latent_slot_count=1`,
+  `wan_action_mode=partial_wan_prefix_action_expert`, and
+  `native_wan_attention_kv_cache=false`. This confirms the bridge works end-to-end
+  with the frozen Wan2.2-5B DiT feature path. It is still an oracle feature-cache
+  construction result, not an action-MSE or closed-loop result; next step is to train
+  the action expert on this cache and compare against current-prefix baselines.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
