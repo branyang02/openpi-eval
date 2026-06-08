@@ -11,9 +11,11 @@ All tasks in a split (sequential, single server):
 
 import collections
 import dataclasses
+import json
 import logging
 import math
 import os
+import time
 
 import gymnasium as gym
 import imageio.v3 as iio
@@ -117,7 +119,8 @@ class Args:
     fps: int = 24
     seed: int = 69_420
 
-    # Override the eval-artifact directory (videos). If None, defaults to
+    # Override the eval-artifact directory (per-episode ``episode_XXX.mp4`` video and
+    # ``episode_XXX.json`` result/latency record). If None, defaults to
     # ``examples/metaworld/output/{env_name}/``. Relative paths are resolved
     # against the user's shell cwd, matching the libero and robocasa examples.
     output_dir: str | None = None
@@ -187,21 +190,211 @@ def make_env(env_name: str, num_envs: int, width: int, height: int, seed: int, c
     return gym.vector.AsyncVectorEnv(env_fns)
 
 
+def _latency_summary(samples_ms: list[float]) -> dict | None:
+    """Summary stats (milliseconds) for per-request latencies, or None if empty."""
+    values = [float(v) for v in samples_ms]
+    if not values:
+        return None
+    return {
+        "count": len(values),
+        "mean_ms": float(np.mean(values)),
+        "min_ms": float(np.min(values)),
+        "max_ms": float(np.max(values)),
+        "p50_ms": float(np.median(values)),
+        "total_ms": float(np.sum(values)),
+    }
+
+
+def _extract_server_infer_ms(result: dict) -> float | None:
+    """Return the server-reported inference latency (ms) from an ``infer`` response.
+
+    The world-model server attaches ``{"server_timing": {"infer_ms": ...}}`` to each
+    response; other policy servers do not, so missing or malformed timing yields None.
+    """
+    return _extract_server_timing_ms(result).get("infer_ms")
+
+
+def _extract_server_timing_ms(result: dict) -> dict[str, float]:
+    """Return numeric server timing fields (milliseconds) from an ``infer`` response."""
+    server_timing = result.get("server_timing")
+    if not isinstance(server_timing, dict):
+        return {}
+    timings: dict[str, float] = {}
+    for key, value in server_timing.items():
+        try:
+            timings[str(key)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return timings
+
+
+def _policy_state(obs: np.ndarray, *, state_dim: int) -> np.ndarray:
+    """Return the observable MetaWorld state slice sent to the policy."""
+    state = np.asarray(obs, dtype=np.float32)[..., :state_dim]
+    if state.shape[-1] != state_dim:
+        raise ValueError(f"MetaWorld observation has state dim {state.shape[-1]}, expected at least {state_dim}.")
+    return state
+
+
+def _metadata_int(metadata: dict | None, key: str, default: int) -> int:
+    if not metadata or metadata.get(key) is None:
+        return default
+    try:
+        return int(metadata[key])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Server metadata field {key!r} must be an integer, got {metadata[key]!r}.") from exc
+
+
+class IdmHistoryBuffer:
+    """Raw previous one-step state/action history, oldest first, for IDM serving."""
+
+    def __init__(self, *, num_envs: int, history_length: int, state_dim: int, action_dim: int) -> None:
+        if history_length <= 0:
+            raise ValueError(f"history_length must be positive, got {history_length}.")
+        self.num_envs = int(num_envs)
+        self.history_length = int(history_length)
+        self.state_dim = int(state_dim)
+        self.action_dim = int(action_dim)
+        self.prev_state_history = np.zeros((self.num_envs, self.history_length, self.state_dim), dtype=np.float32)
+        self.prev_action_history = np.zeros((self.num_envs, self.history_length, self.action_dim), dtype=np.float32)
+        self.history_mask = np.zeros((self.num_envs, self.history_length), dtype=np.float32)
+
+    @classmethod
+    def from_metadata(cls, metadata: dict | None, *, num_envs: int, default_state_dim: int = 4) -> "IdmHistoryBuffer | None":
+        history_length = _metadata_int(metadata, "idm_history_length", 0)
+        if history_length <= 0:
+            return None
+        return cls(
+            num_envs=num_envs,
+            history_length=history_length,
+            state_dim=_metadata_int(metadata, "state_dim", default_state_dim),
+            action_dim=_metadata_int(metadata, "action_dim", 4),
+        )
+
+    def reset(self) -> None:
+        self.prev_state_history.fill(0.0)
+        self.prev_action_history.fill(0.0)
+        self.history_mask.fill(0.0)
+
+    def reset_rows(self, rows: np.ndarray) -> None:
+        rows = np.asarray(rows, dtype=bool)
+        expected = (self.num_envs,)
+        if rows.shape != expected:
+            raise ValueError(f"IDM history reset rows mask must have shape {expected}, got {rows.shape}.")
+        if not rows.any():
+            return
+        self.prev_state_history[rows] = 0.0
+        self.prev_action_history[rows] = 0.0
+        self.history_mask[rows] = 0.0
+
+    def as_obs_dict(self) -> dict[str, np.ndarray]:
+        return {
+            "prev_state_history": self.prev_state_history.copy(),
+            "prev_action_history": self.prev_action_history.copy(),
+            "history_mask": self.history_mask.copy(),
+        }
+
+    def append(self, state: np.ndarray, action: np.ndarray) -> None:
+        state = np.asarray(state, dtype=np.float32)
+        action = np.asarray(action, dtype=np.float32)
+        expected_state = (self.num_envs, self.state_dim)
+        expected_action = (self.num_envs, self.action_dim)
+        if state.shape != expected_state:
+            raise ValueError(f"IDM history state must have shape {expected_state}, got {state.shape}.")
+        if action.shape != expected_action:
+            raise ValueError(f"IDM history action must have shape {expected_action}, got {action.shape}.")
+
+        self.prev_state_history[:, :-1] = self.prev_state_history[:, 1:]
+        self.prev_state_history[:, -1] = state
+        self.prev_action_history[:, :-1] = self.prev_action_history[:, 1:]
+        self.prev_action_history[:, -1] = action
+        self.history_mask[:, :-1] = self.history_mask[:, 1:]
+        self.history_mask[:, -1] = 1.0
+
+
+def _episode_record(
+    *,
+    env_name: str,
+    episode: int,
+    num_envs: int,
+    max_steps: int,
+    replan_steps: int,
+    total_reward: np.ndarray,
+    success: np.ndarray,
+    server_infer_ms: list[float],
+    client_request_ms: list[float],
+    video: str,
+    server_stage_timings_ms: dict[str, list[float]] | None = None,
+) -> dict:
+    """Build the JSON-serializable per-episode result + latency record.
+
+    ``server_infer_ms`` comes from the server's ``server_timing.infer_ms`` field
+    (only the world-model server in ``examples/world_model_env`` reports it);
+    ``client_request_ms`` is the client-side round-trip per ``policy.infer`` call.
+    Each latency section is omitted when its sample list is empty, so the record
+    stays correct against policy servers that do not report timing.
+    """
+    success_flat = np.asarray(success).reshape(-1)
+    reward_flat = np.asarray(total_reward).reshape(-1)
+    record: dict = {
+        "env_name": env_name,
+        "episode": int(episode),
+        "num_envs": int(num_envs),
+        "max_steps": int(max_steps),
+        "replan_steps": int(replan_steps),
+        "num_inference_requests": len(client_request_ms),
+        "success_rate": float(success_flat.mean()) if success_flat.size else 0.0,
+        "mean_reward": float(reward_flat.mean()) if reward_flat.size else 0.0,
+        "success": [bool(s) for s in success_flat],
+        "total_reward": [float(r) for r in reward_flat],
+        "video": video,
+    }
+    server_summary = _latency_summary(server_infer_ms)
+    if server_summary is not None:
+        server_timing_record = {**server_summary, "per_request": [float(v) for v in server_infer_ms]}
+        stage_records = {}
+        for key, samples_ms in sorted((server_stage_timings_ms or {}).items()):
+            stage_summary = _latency_summary(samples_ms)
+            if stage_summary is not None:
+                stage_records[key] = {**stage_summary, "per_request": [float(v) for v in samples_ms]}
+        if stage_records:
+            server_timing_record["stages"] = stage_records
+        record["server_timing_ms"] = server_timing_record
+    client_summary = _latency_summary(client_request_ms)
+    if client_summary is not None:
+        record["client_timing_ms"] = {**client_summary, "per_request": [float(v) for v in client_request_ms]}
+    return record
+
+
+def _write_episode_record(output_dir: str, episode: int, record: dict) -> str:
+    """Write ``record`` to ``output_dir/episode_{episode:03d}.json``; return the path."""
+    path = os.path.join(output_dir, f"episode_{episode:03d}.json")
+    with open(path, "w") as f:
+        json.dump(record, f, indent=2)
+    return path
+
+
 def run_episode(
     env: gym.Env,
     policy,
     args: Args,
     episode: int,
     output_dir: str,
+    policy_metadata: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Run a single episode; return ``(total_reward, success)`` per env."""
     prompt = TASK_TO_PROMPT[args.env_name]
     obs, info = env.reset(seed=args.seed + episode)
     camera_views = info["cameras"]
     num_envs = env.num_envs
+    idm_history = IdmHistoryBuffer.from_metadata(policy_metadata, num_envs=num_envs)
+    policy_state_dim = idm_history.state_dim if idm_history is not None else _metadata_int(policy_metadata, "state_dim", 4)
     success = np.zeros(num_envs, dtype=bool)
     total_reward = np.zeros(num_envs)
     action_plan: collections.deque = collections.deque()
+    server_infer_ms: list[float] = []
+    server_stage_timings_ms: dict[str, list[float]] = {}
+    client_request_ms: list[float] = []
 
     video_path = os.path.join(output_dir, f"episode_{episode:03d}.mp4")
     with iio.imopen(video_path, "w", plugin="pyav") as video:
@@ -213,15 +406,25 @@ def run_episode(
             video.write_frame(grid_frame)
 
             if not action_plan:
+                current_state = _policy_state(obs, state_dim=policy_state_dim)
                 obs_dict = {
                     "observation/image": camera_views["corner4"],
                     "observation/wrist_image": camera_views["gripperPOV"],
-                    "observation/state": obs.astype(np.float32)[
-                        ..., :4
-                    ],  # first 4 dims are the true observable state in Metaworld.
+                    "observation/state": current_state,
                     "prompt": [prompt] * num_envs,
                 }
+                if idm_history is not None:
+                    obs_dict.update(idm_history.as_obs_dict())
+                request_start = time.perf_counter()
                 result = policy.infer(obs_dict)
+                client_request_ms.append((time.perf_counter() - request_start) * 1000.0)
+                server_timing_ms = _extract_server_timing_ms(result)
+                infer_ms = server_timing_ms.get("infer_ms")
+                if infer_ms is not None:
+                    server_infer_ms.append(infer_ms)
+                for key, value in server_timing_ms.items():
+                    if key != "infer_ms":
+                        server_stage_timings_ms.setdefault(key, []).append(value)
                 action_chunk = np.clip(result["actions"], -1.0, 1.0).astype(np.float32)
 
                 assert (
@@ -232,7 +435,20 @@ def run_episode(
                     action_plan.append(action_chunk[:, t, :])
 
             action = action_plan.popleft()
+            state_before_step = _policy_state(obs, state_dim=policy_state_dim) if idm_history is not None else None
             obs, reward, terminated, truncated, info = env.step(action)
+            if idm_history is not None:
+                # Store the clipped action actually passed to env.step, matching what the env executes.
+                idm_history.append(state_before_step, action)
+            done_rows = np.asarray(terminated, dtype=bool).reshape(-1) | np.asarray(truncated, dtype=bool).reshape(-1)
+            if done_rows.shape != (num_envs,):
+                raise ValueError(f"Vector env done mask must have shape ({num_envs},), got {done_rows.shape}.")
+            if done_rows.any():
+                if idm_history is not None:
+                    idm_history.reset_rows(done_rows)
+                # Action chunks are queued for the whole vector batch. When any row resets,
+                # clear the batch plan so the next step replans against fresh per-row history.
+                action_plan.clear()
             camera_views = info["cameras"]
             total_reward += reward
             step_success = np.asarray(info.get("success", np.zeros(num_envs)), dtype=bool)
@@ -242,10 +458,27 @@ def run_episode(
 
             pbar.set_postfix(reward=f"{total_reward.mean():.1f}", success=f"{success.mean():.0%}")
 
+    record = _episode_record(
+        env_name=args.env_name,
+        episode=episode,
+        num_envs=num_envs,
+        max_steps=args.max_steps,
+        replan_steps=args.replan_steps,
+        total_reward=total_reward,
+        success=success,
+        server_infer_ms=server_infer_ms,
+        client_request_ms=client_request_ms,
+        video=os.path.basename(video_path),
+        server_stage_timings_ms=server_stage_timings_ms,
+    )
+    record_path = _write_episode_record(output_dir, episode, record)
+
+    server_summary = record.get("server_timing_ms")
+    latency_note = f", server_infer_ms_mean={server_summary['mean_ms']:.1f}" if server_summary else ""
     logger.info(
         f"Episode {episode + 1}/{args.num_episodes}: "
-        f"mean_reward={total_reward.mean():.2f}, success_rate={success.mean():.2f}, "
-        f"video={video_path}"
+        f"mean_reward={total_reward.mean():.2f}, success_rate={success.mean():.2f}{latency_note}, "
+        f"video={video_path}, record={record_path}"
     )
     return total_reward, success
 
@@ -254,7 +487,8 @@ def main(args: Args) -> None:
     np.random.seed(args.seed)
 
     policy = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
-    logger.info(f"Server metadata: {policy.get_server_metadata()}")
+    policy_metadata = policy.get_server_metadata()
+    logger.info(f"Server metadata: {policy_metadata}")
 
     if args.output_dir is not None:
         output_dir = os.path.abspath(args.output_dir)
@@ -274,7 +508,7 @@ def main(args: Args) -> None:
     all_successes: list[bool] = []
     try:
         for episode in range(args.num_episodes):
-            _, success = run_episode(env, policy, args, episode, output_dir)
+            _, success = run_episode(env, policy, args, episode, output_dir, policy_metadata=policy_metadata)
             all_successes.extend(bool(s) for s in success)
     finally:
         env.close()

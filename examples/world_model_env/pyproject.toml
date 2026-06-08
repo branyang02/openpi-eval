@@ -1,0 +1,75 @@
+[project]
+name = "world-model-env"
+version = "0.1.0"
+description = "MetaWorld world-model and inverse-dynamics experiments"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "datasets==3.6.0",
+    "imageio>=2.37.3",
+    "lerobot",
+    "matplotlib>=3.10.3",
+    "numpy>=1.26.4,<2.0.0",
+    "openpi-client",
+    "pillow>=11.2.1",
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+    "tqdm>=4.67.1",
+    "tyro>=0.9.22",
+    "websockets>=13.0",
+]
+
+[project.optional-dependencies]
+video = [
+    "accelerate>=1.8.0",
+    "diffusers>=0.34.0",
+    "dashscope>=1.23.0",
+    "decord>=0.6.0",
+    "easydict>=1.13",
+    "flash-attn>=2.8.3",
+    "ftfy>=6.3.1",
+    "imageio-ffmpeg>=0.6.0",
+    "librosa>=0.11.0",
+    "modelscope>=1.27.0",
+    "opencv-python>=4.9.0.80",
+    "peft>=0.16.0",
+    "safetensors>=0.5.3",
+    "tokenizers>=0.20.3",
+    "transformers>=4.49.0,<=4.51.3",
+]
+
+[tool.uv.sources]
+lerobot = { git = "https://github.com/branyang02/lerobot", rev = "d7898d8dfdab7a0ff948659394d5a489bf6b9132" }
+openpi-client = { path = "../../packages/openpi-client", editable = true }
+
+[tool.uv.extra-build-dependencies]
+flash-attn = [{ requirement = "torch", match-runtime = true }]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "ruff>=0.8.6",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["world_model"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
