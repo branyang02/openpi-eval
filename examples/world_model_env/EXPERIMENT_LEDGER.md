@@ -810,6 +810,23 @@ is **`0.04420376801863313`**.
   duplicate-cache 2GT:1Gen baseline. Treat seed111 as the current best generated-prefix
   action expert, and use seed sweeps/selection as a first-class part of this small-cache
   protocol.
+- **Weighted 2GT:1Gen epoch-length sweep (2026-06-08)** Tested whether changing the
+  source-aware sampler's epoch draw count improves the seed111 best checkpoint. Both
+  runs used the same `[GT, generated-full-s4]` sources, `cache_weights=(2, 1)`, seed
+  `111`, and action-expert hyperparameters; only `samples_per_epoch` changed.
+
+  | Checkpoint | GT eval MSE | generated-full s4 MSE | generated-full s8 MSE |
+  |---|---:|---:|---:|
+  | weighted 2GT:1Gen seed111, `samples_per_epoch=704`, `output/pi05_wan_action_expert_weighted_gt2_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed111_e300_h512_l6_spe704` | `2.476896047592163` | `4.0094116640378505` | `3.6279221657824383` |
+  | weighted 2GT:1Gen seed111, `samples_per_epoch=1056` | `2.333611488342285` | `3.554038408137735` | `3.453293501059417` |
+  | weighted 2GT:1Gen seed111, `samples_per_epoch=1408`, `output/pi05_wan_action_expert_weighted_gt2_generated1_full_s4_prefix_diverse44_train2_spe4_eval2_3_spe2_h4_prefixstate_norm_seed111_e300_h512_l6_spe1408` | `2.41200852394104` | `3.8348285956005284` | `3.653273097623354` |
+
+  Interpretation: epoch length is a negative static knob around this recipe. Reducing
+  to one draw per cache row undertrains generated transfer, while increasing to four
+  cache-equivalent sources does not improve GT or generated eval. Keep
+  `samples_per_epoch=1056` for the small-cache source-aware protocol; next useful work
+  should target staged sampling, closed-loop validation, or generated-future quality
+  rather than more fixed epoch-length sweeps.
 - **Broad train2 result** Current prefix+state trained on the 44-task train2 `spe16`
   cache (`1408` rows) scored `0.163603` on the matched ep16-23 eval, roughly tied with
   the matched decoded-video smoke checkpoint and much better than the mean baseline
