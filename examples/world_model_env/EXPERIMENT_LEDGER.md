@@ -2107,6 +2107,58 @@ is **`0.04420376801863313`**.
   point) with ranking active, then compare best eval44 idm_mse vs Loop84 seed8 `3.5509` and
   the future-usage gap vs `-0.05565`. Will reassess at ~epoch 30 whether ranking is moving
   eval MSE toward the 2.68 goal; if not, repurpose a GPU to a direct-MSE experiment.
+- **Compute reallocation (2026-06-09 ~19:45 UTC)** To prioritize the 2.68 goal, stopped
+  Loop85 rerun3 **seed7** (GPU0) and kept **seed8** (GPU1) running — seed8 alone still
+  validates the OOM fix on real data (passing epoch 17) and answers the ranking question.
+  GPU0 reassigned to Loop86 (below). NOTE: `pkill -f "<dir-substring>"` also killed the
+  Monitor and its own shell because the pattern matched their command lines — prefer killing
+  by explicit PID or a pattern that cannot match the monitor.
+
+### Why pi05 (2.6755) beats the IDM (3.5509), and the data-scaling + leakage findings
+- **pi05 action-expert gap analysis** The Pi0.5-style Wan action-expert reaches eval44
+  `val_model_sample_mse=2.6755` vs the decoded-video IDM's `3.5509`. Investigation of
+  `train_pi05_wan_action_expert.py` / `world_model/pi05_wan_action_expert.py` and the winning
+  run's `metrics.json` (`...train8_spe8_eval44_ep8_spe16_h4_prefixstate_crossattn_taskcvar_f025_w0125_seed109_e1200_h512_l6_lr1e4`)
+  attributes the gap mainly to: (1) **richer input** — the action-expert conditions on frozen
+  Wan DiT **prefix hidden states** (semantic, task-aware features) rather than raw pixels;
+  (2) **task-CVaR loss weighting** (`task_cvar`, fraction 0.25, weight 0.125) that targets the
+  worst-task tail (notably action dim-2). Longer training is NOT the lever: the ledger's own
+  e600->e1200 check is flat (~2.683 -> ~2.680). Both ingredients are partially portable to the
+  IDM (task-CVaR loss; richer/frozen visual features).
+- **Dataset is massively under-used (data-scaling headroom)** `metaworld_ml45` has **4332
+  episodes across 44 tasks (~98 demos/task)**, but Loop84/Loop85 train on only **8 demos/task
+  (351 eps)**. ~3981 episodes are unused. The ledger already flagged "increase data
+  diversity/coverage" as the next pi05-route step, and more demos materially helped before.
+- **eval44 is in-distribution / leaky (methodological finding)** All **44/44** eval44 episodes
+  are *inside* Loop84/Loop85's training episode list, and `eval_idm.py` evaluates on exactly
+  the episodes passed with no internal hold-out. So the existing `3.5509` (IDM) and `2.6755`
+  (action-expert) eval44 numbers are computed on episodes seen during training — optimistic,
+  not true generalization. They remain internally comparable (both leaky), but a *meaningful*
+  "beat pi05" result needs a clean held-out split.
+
+### Loop86 launch: data-scaled CLEAN held-out split IDM (direct 2.68 attack)
+- **Design** Same architecture as Loop84 (patch-token cross-attention `future_delta` flow
+  IDM, no ranking, batch64, spe15, e120, early-stop 30, seed8), but trained on a **clean,
+  verified** split: **24 demos/task (1056 eps)** with all 44 eval44 episodes and ep 1783
+  fully **excluded** (verified: 1056 eps, 24/task exactly, 0 eval overlap). eval44 is now a
+  *true* held-out set. This isolates the **data-scaling** lever (8->24 demos/task) and gives an
+  honest generalization number.
+- **Short-episode filter** First launch crashed in dataset construction: with 24 demos/task
+  some short episodes (e.g. ep 1804, length 13 -> only 9 valid windows) cannot supply
+  `spe15` (needs valid windows = length-4 >= 15, i.e. length >= 19). Only 7/4332 episodes are
+  that short; the clean list now filters to length>=19 before taking 24/task and still yields
+  a full 1056 eps (24/task exactly, 0 eval overlap). Relaunched successfully.
+- **Launch** `agent_logs/loop86_dataclean24_launch.sh` (reads the clean list from
+  `output/.clean_train24_episodes.json`), GPU0, detached (`setsid nohup`, PPID 1,
+  `expandable_segments`). Output dir
+  `output/idm_flow_patch_crossattn_futuredelta_gt_dataclean_train24_skipeval44_h4_seed8_no_rank_e120`,
+  log `agent_logs/loop86_dataclean24_seed8.log`.
+- **Next** When Loop86 finishes (or hits a strong checkpoint), run held-out eval44 with the
+  Loop84 recipe and compare to leaky baselines (IDM 3.5509, pi05 2.6755), noting Loop86's
+  eval44 is now honest. If data-scaling clearly helps, push to more demos/task and add
+  task-CVaR to the IDM loss. Roadmap toward 2.68: (a) data scale, (b) IDM task-CVaR,
+  (c) richer/frozen Wan features for the IDM, (d) extend the pi05 action-expert route with
+  more data, all measured on a clean held-out split.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
