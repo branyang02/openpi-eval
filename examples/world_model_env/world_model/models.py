@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import torch
+import torch.utils.checkpoint
 from torch import nn
 
 from world_model.config import ModelConfig
@@ -1362,7 +1363,24 @@ class InverseDynamicsModel(nn.Module):
                 flow_head_kwargs["visual_context_tokens"] = visual_context_tokens
             if history_tokens is not None:
                 flow_head_kwargs["history_tokens"] = history_tokens
-            velocity = self.flow_head(context, action, time, **flow_head_kwargs)
+            # When this sampler runs inside a grad-tracked loss (e.g. the sampled_action
+            # future-ranking scorer, which unrolls all 16 steps for the real future plus every
+            # negative candidate), retaining each step's full flow_head activations exceeds an
+            # 80 GB H100. Gradient-checkpoint each step so its internal activations are recomputed
+            # in backward instead of stored; use_reentrant=False forwards kwargs and preserves RNG
+            # state (so dropout is reproduced) -> identical numerics. Eval/diagnostic callers run
+            # under no_grad, where checkpoint is a transparent passthrough.
+            if torch.is_grad_enabled():
+                velocity = torch.utils.checkpoint.checkpoint(
+                    self.flow_head,
+                    context,
+                    action,
+                    time,
+                    use_reentrant=False,
+                    **flow_head_kwargs,
+                )
+            else:
+                velocity = self.flow_head(context, action, time, **flow_head_kwargs)
             action = action + velocity * step_size
         action = action.view(batch_size, num_samples, self.config.action_horizon, self.config.action_dim)
         return action.mean(dim=1)

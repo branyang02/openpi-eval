@@ -2086,6 +2086,27 @@ is **`0.04420376801863313`**.
   ~3.55 -> ~2.68. Loop85 ranking targets the future-usage gap; separate experiments will
   target eval MSE directly (larger/longer IDM, more data, Wan frozen-encoder features, and
   the Pi0.5-style backbone route).
+- **Gradient-checkpoint fix VERIFIED at batch64 (2026-06-09 ~19:30 UTC)** Implemented the
+  fix in `models.py` `InverseDynamicsModel.sample_action`: each per-step `flow_head` call is
+  now wrapped in `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)` when
+  `torch.is_grad_enabled()` (eval/diagnostic `no_grad` callers are unchanged). Smoke test
+  (`output/loop85_ckpt_smoke`, synthetic, **batch64**, sampled-action ranking active from
+  epoch 1 with all 3 negatives, the exact path that OOM'd twice) **completed 3 epochs with
+  no OOM**; the ranking loss is finite, nonzero, and decreasing (`2.703 -> 1.452 -> 1.399`)
+  and `idm_mse` drops (`0.237 -> 0.113`), proving gradients flow correctly through the
+  checkpointed 16-step sampler for every candidate. `ruff check` clean; `pytest
+  tests/test_models.py tests/test_training_smoke.py` = 174 passed. Numerics preserved by
+  construction (no_grad path identical; grad path uses RNG-preserving checkpoint). This
+  unblocks sampled-action ranking at the original batch64, removing the batch-size confound.
+- **Loop85 rerun3 launch (batch64, checkpointed) at 2026-06-09 ~19:30 UTC** Relaunched both
+  seeds at the original `--batch-size 64` (clean, unconfounded vs Loop84) via
+  `agent_logs/loop85_rerun3_launch.sh`, all ranking flags identical to rerun1/2. Detached
+  (`setsid nohup`, PPID 1, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`). Output dirs
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed{7,8}_sampled_rank005_e120_rerun3`,
+  logs `agent_logs/loop85_rerun3_seed{7,8}.log`. Success bar: pass epoch 17 (the prior OOM
+  point) with ranking active, then compare best eval44 idm_mse vs Loop84 seed8 `3.5509` and
+  the future-usage gap vs `-0.05565`. Will reassess at ~epoch 30 whether ranking is moving
+  eval MSE toward the 2.68 goal; if not, repurpose a GPU to a direct-MSE experiment.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
