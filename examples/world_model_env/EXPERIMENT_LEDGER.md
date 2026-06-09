@@ -1883,35 +1883,38 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at 2026-06-09 03:16 UTC** Metrics were read from each
-  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 53 metric
-  rows; best is still epoch 31 with `idm_mse=5.745670` and
-  `idm_smooth_l1=1.115880`. Latest seed7 epoch 53 has `idm_mse=6.238880`,
-  degradation `0.03781`, rank accuracy `0.262`, and real-vs-best-negative gap
-  `-0.10826`; seed7's strongest degradation so far is epoch 46 (`0.04796`), and
-  strongest rank accuracy is epoch 35 (`0.281`). Seed8 has 53 metric rows; best action
-  MSE is latest epoch 53 with `idm_mse=5.075420`, `idm_smooth_l1=1.004757`,
-  degradation `0.04195`, rank accuracy `0.249`, and gap `-0.08121`. Seed8's strongest
-  degradation so far is epoch 52 (`0.05631`), and strongest rank accuracy is epoch 47
-  (`0.317`). The future-usage gate is still false for both seeds.
-- **Interpretation so far** This remains a live data-scale check rather than a proven
-  long-run candidate. Seed8 epoch 53 beats
-  Loop80's best internal `idm_mse=5.554099767980441`, so the train8/spe15 data-scale
-  change now has real action-MSE signal and continues improving late in the run.
-  However, it still does not beat Loop80's
-  held-out eval44 `idm_mse=4.942809457489939` because that broader eval has not been run
-  yet, and both seeds still fail the future-usage gate because the real-vs-best-negative
-  gap remains negative. This supports continuing to early stopping and then prioritizing
-  held-out eval44/diagnostics before launching a much larger run.
-- **Handoff / next steps** Let both live runs continue unless they clearly diverge. Poll
+- **Seed7 final + eval44 at 2026-06-09 03:46 UTC** Seed7 stopped early at epoch 61.
+  Its best internal checkpoint is still epoch 31 with `idm_mse=5.745670` and
+  `idm_smooth_l1=1.115880`. Held-out eval44 third-demo `spe15` on
+  `best_idm_checkpoint.pt` scored `idm_mse=4.181991880590266`,
+  `idm_smooth_l1=0.6147283091689602`, over `660` samples, versus mean-action baseline
+  `idm_mse=6.477916971842448`. This beats Loop80's held-out eval44
+  `idm_mse=4.942809457489939`. Teacher-forced diagnostics on the same split report
+  `future_blind=false`, current-repeated degradation `0.2543424288431799`, and
+  current-repeated output delta `0.21559289440964208`. Future ranking remains weak:
+  teacher-forced rank accuracy `0.3196969696969697` with gap
+  `-0.018344260661891012`; sampled-action rank accuracy `0.36818181818181817` with gap
+  `-0.08071140588232965`.
+- **Seed8 live metrics at 2026-06-09 03:46 UTC** Seed8 is still active. It has 62
+  metric rows; best action MSE remains epoch 53 with `idm_mse=5.075420` and
+  `idm_smooth_l1=1.004757`. Latest epoch 62 has `idm_mse=5.280811`; the future-usage
+  gate remains false.
+- **Interpretation so far** The train8/spe15 data-scale change now has real held-out
+  action-MSE signal: seed7 improves Loop80 eval44 despite its weaker internal validation
+  MSE. The seed7 checkpoint is not collapsed/future-blind under the current-repeated
+  sensitivity gate, but future candidate ranking is still weak because real futures are
+  not reliably ranked above negative futures. This supports evaluating seed8 when it
+  finishes, then trying a sampled-action future-ranking objective if ranking remains the
+  main failure mode.
+- **Handoff / next steps** Let seed8 continue unless it clearly diverges. Poll
   with:
   `tail -n 3 output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed{7,8}_no_rank_e120/metrics.jsonl`.
-  When each run finishes, read `metrics.json`, then evaluate the best checkpoint on the
+  When seed8 finishes, read `metrics.json`, then evaluate the best checkpoint on the
   Loop80 eval44 third-demo `spe15` split and run `diagnose_idm.py` with
   `--future-usage-score-mode teacher_forced_endpoint`. Compare against Loop80 before
-  deciding whether to spend GPU time on a true long run. If the best checkpoint stays
-  near `5.8-5.9` with a negative gap, the next experiment should add a future-usage
-  objective/regularizer rather than simply increasing epochs.
+  deciding whether to spend GPU time on a true long run. If seed8 repeats seed7's
+  eval44 improvement while ranking stays weak, the next experiment should add a
+  future-usage objective/regularizer rather than simply increasing epochs.
 - **Ready eval44 recipe** Recover the comparable held-out episodes from
   `output/eval_idm_flow_patch_crossattn_futuredelta_gt_train8_spe8_eval44_spe15_h4_seed7_no_rank/eval_metrics.json`.
   The split is currently:
