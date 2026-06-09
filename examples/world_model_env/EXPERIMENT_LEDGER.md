@@ -1860,6 +1860,60 @@ is **`0.04420376801863313`**.
   current stack is narrow; the next long run should use task-diverse Wan fine-tuning
   and/or task-diverse IDM training rather than simply extending the assembly-only LoRA.
 
+### Loop84 live handoff: train8/spe15 decoded-video IDM data-scale run
+- **Question** Should we start longer training runs on a path that shows signal? This
+  run tests the explicit modular `decoded_video_idm` route, not the current-prefix
+  Pi0.5-style route, by increasing the Loop80 train8 split from `spe8` to `spe15` and
+  allowing up to `120` epochs with early stopping.
+- **Stack / run shape** Same explicit patch-token cross-attention `future_delta` IDM as
+  Loop80: `idm_arch=flow_transformer`, `idm_visual_encoder=patch`,
+  `idm_future_conditioning=future_only`, visual-token cross-attention over future-only
+  `future_delta` tokens, `frame_delta=1`, `num_future_frames=4`,
+  `action_horizon=4`, deterministic flow sampling (`steps=16`,
+  `noise_scale=0.0`), no ranking loss, and `--idm-future-usage-eval`.
+- **Split fix** The unfiltered train8 `spe15` launch failed because episode `1783` has
+  only 8 valid nonterminal windows for the h4/future offset. The live runs reuse the
+  Loop80 train8 episode list but skip only episode `1783`; expected train rows are about
+  `5265` (`351` episodes x `15` samples).
+- **Live artifacts / processes as of handoff** Output dirs are
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed7_no_rank_e120`
+  and
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed8_no_rank_e120`.
+  Both runs were still active at handoff on 2026-06-09 after about 1.5 hours. Process
+  parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
+  wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
+  PTY sessions are `26360` and `51815`.
+- **Partial metrics at epoch 27** Metrics were read from each `metrics.jsonl`.
+  Seed7 has 27 metric rows; best is epoch 26 with `idm_mse=5.927279869432551`,
+  `future_usage_current_repeated_degradation=0.008682754938076399`,
+  `future_usage_rank_accuracy=0.2117437722419929`, and
+  `future_usage_real_vs_best_negative_gap=-0.07141781065387658`; latest epoch 27 is
+  `idm_mse=6.14552779554048`, and the gate is still false. Seed8 has 27 metric rows;
+  best action MSE is latest epoch 27 with `idm_mse=5.7500336127773295`,
+  `degradation=0.014037422066905744`, `rank_accuracy=0.24555160142348753`, and gap
+  `-0.05950249705026158`. Seed8's strongest future-replacement degradation so far is
+  epoch 26 with
+  `degradation=0.03554381149095148`, but that checkpoint has `idm_mse=5.962576027866785`
+  and the gate is still false.
+- **Interpretation so far** This is a better signal than the very early epochs because
+  seed8 repeatedly shows nontrivial current-repeated degradation and late action-MSE
+  recovery, while seed7 also recovered to a new best at epoch 26. Seed8's epoch 27
+  result is the strongest new sign from this run. However, neither seed
+  has beaten Loop80's best internal `idm_mse=5.554099767980441` or Loop80's held-out
+  eval44 `idm_mse=4.942809457489939`, and both still fail the future-usage gate because
+  the real-vs-best-negative gap remains negative. This supports continuing the run to
+  early stopping, but not yet launching a much larger run without either better action
+  MSE or stronger future-conditioning pressure.
+- **Handoff / next steps** Let both live runs continue unless they clearly diverge. Poll
+  with:
+  `tail -n 3 output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed{7,8}_no_rank_e120/metrics.jsonl`.
+  When each run finishes, read `metrics.json`, then evaluate the best checkpoint on the
+  Loop80 eval44 third-demo `spe15` split and run `diagnose_idm.py` with
+  `--future-usage-score-mode teacher_forced_endpoint`. Compare against Loop80 before
+  deciding whether to spend GPU time on a true long run. If the best checkpoint stays
+  near `5.8-5.9` with a negative gap, the next experiment should add a future-usage
+  objective/regularizer rather than simply increasing epochs.
+
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
   assembly-only canonical split.
