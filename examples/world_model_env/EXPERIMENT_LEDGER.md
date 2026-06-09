@@ -1883,21 +1883,22 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at 2026-06-09 02:53 UTC** Metrics were read from each
-  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 45 metric
-  rows; best is epoch 31 with `idm_mse=5.745670` and
-  `idm_smooth_l1=1.115880`. Latest seed7 epoch 45 has `idm_mse=6.208065`,
-  degradation `0.02471`, rank accuracy `0.253`, and real-vs-best-negative gap
-  `-0.07374`; seed7's strongest degradation so far is epoch 44 (`0.03190`), and
-  strongest rank accuracy is epoch 35 (`0.281`). Seed8 has 45 metric rows; best action
-  MSE is latest epoch 45 with `idm_mse=5.201902`, `idm_smooth_l1=1.060781`,
-  degradation `0.03186`, rank accuracy `0.244`, and gap `-0.06687`. Seed8's strongest
-  degradation so far is epoch 39 (`0.04524`), and strongest rank accuracy is still epoch
-  35 (`0.299`). The future-usage gate is still false for both seeds.
+- **Partial metrics at 2026-06-09 03:16 UTC** Metrics were read from each
+  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 53 metric
+  rows; best is still epoch 31 with `idm_mse=5.745670` and
+  `idm_smooth_l1=1.115880`. Latest seed7 epoch 53 has `idm_mse=6.238880`,
+  degradation `0.03781`, rank accuracy `0.262`, and real-vs-best-negative gap
+  `-0.10826`; seed7's strongest degradation so far is epoch 46 (`0.04796`), and
+  strongest rank accuracy is epoch 35 (`0.281`). Seed8 has 53 metric rows; best action
+  MSE is latest epoch 53 with `idm_mse=5.075420`, `idm_smooth_l1=1.004757`,
+  degradation `0.04195`, rank accuracy `0.249`, and gap `-0.08121`. Seed8's strongest
+  degradation so far is epoch 52 (`0.05631`), and strongest rank accuracy is epoch 47
+  (`0.317`). The future-usage gate is still false for both seeds.
 - **Interpretation so far** This remains a live data-scale check rather than a proven
-  long-run candidate. Seed8 epoch 45 beats
+  long-run candidate. Seed8 epoch 53 beats
   Loop80's best internal `idm_mse=5.554099767980441`, so the train8/spe15 data-scale
-  change now has real action-MSE signal. However, it still does not beat Loop80's
+  change now has real action-MSE signal and continues improving late in the run.
+  However, it still does not beat Loop80's
   held-out eval44 `idm_mse=4.942809457489939` because that broader eval has not been run
   yet, and both seeds still fail the future-usage gate because the real-vs-best-negative
   gap remains negative. This supports continuing to early stopping and then prioritizing
