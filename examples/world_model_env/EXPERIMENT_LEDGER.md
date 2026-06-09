@@ -374,6 +374,23 @@ is **`0.04420376801863313`**.
   Interpretation: the train8 current-prefix signal is seed-robust enough to justify
   longer runs, but the high-CVaR schedule that looked promising on train2 does not
   transfer; use fixed mild CVaR as the longer-run baseline.
+- **Train8 e1200 fixed-CVaR long-run check (2026-06-08)** Ran the same train8
+  cross-attention fixed mild-CVaR recipe for `1200` epochs from scratch on seeds
+  `109` and `110` to test whether the e600 signal keeps improving with longer
+  training. Seed109 checkpoint
+  `output/pi05_wan_action_expert_train8_spe8_eval44_ep8_spe16_h4_prefixstate_crossattn_taskcvar_f025_w0125_seed109_e1200_h512_l6_lr1e4/checkpoint.pt`
+  scored `dataset_action_mse=2.675514329323197`, `smooth_l1=0.2570128809874108`,
+  per-dim `[1.6163032771369545, 1.0870213588712245, 7.957095362715818, 0.04163731856879019]`.
+  Seed110 checkpoint
+  `output/pi05_wan_action_expert_train8_spe8_eval44_ep8_spe16_h4_prefixstate_crossattn_taskcvar_f025_w0125_seed110_e1200_h512_l6_lr1e4/checkpoint.pt`
+  scored `dataset_action_mse=2.6845298788870795`, `smooth_l1=0.2580785207548198`,
+  per-dim `[1.8784302947382272, 1.056729207107002, 7.756928358437211, 0.04603165526587627]`.
+  The e1200 two-seed mean is `~2.680`, essentially flat versus the e600 fixed-CVaR
+  two-seed mean `~2.683`: seed109 slightly regressed from `2.644464`, while seed110
+  slightly improved from `2.720783`. Interpretation: the current-prefix fixed-CVaR
+  signal is real and stable across seeds, but longer training alone does not unlock
+  a large gain. Next scaling experiment should increase data diversity/coverage or
+  add checkpoint selection/periodic validation, not simply raise epoch count again.
 - **Pi0.5 timestep-embedding ablation (2026-06-08)** Added
   `--timestep-embedding-style {diffusion,pi05}` to the cached-prefix action
   expert. The default `diffusion` style preserves the previous geometric
