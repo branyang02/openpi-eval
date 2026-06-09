@@ -2011,6 +2011,17 @@ is **`0.04420376801863313`**.
   becomes nonzero; only then can sampled-action ranking be interpreted. Next checkpoint:
   confirm first epoch-1 row is written (startup health), then watch the epoch-16 ranking
   activation and compare best held-out vs Loop84 seed8 eval44 `idm_mse=3.5508617892409817`.
+- **rerun1 startup confirmed at 2026-06-09 ~17:50 UTC** Both detached runs reached GPU
+  training and wrote epoch-1 rows; both python processes have PPID 1 (fully detached, will
+  survive session teardown), GPUs ~20 GB each. The epoch-1 metrics reproduce the original
+  Loop85 epoch-1 values to ~6 significant figures, confirming rerun1 is a faithful
+  continuation of the same seeded recipe (not a reconfigured run): seed7 epoch 1
+  `idm_mse=6.5336195107456625`, `idm_smooth_l1=1.2633889357814585`, sampled-action rank
+  accuracy `0.04092526690391459`, gap `-0.021285701914296032` (vs original
+  `idm_mse=6.533620868289174`); seed8 epoch 1 `idm_mse=6.798603804510259`,
+  `idm_smooth_l1=1.224980826055452`, sampled-action rank accuracy `0.008896797153024912`,
+  gap `-0.05414821149191398` (vs original `idm_mse=6.798647897523493`).
+  `idm_future_ranking_weight_active` is still `0.0` as expected before the epoch-16 start.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
