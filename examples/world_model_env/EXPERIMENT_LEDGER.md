@@ -2057,6 +2057,35 @@ is **`0.04420376801863313`**.
   `idm_future_ranking_weight_active>0`. This is attempt 3; if it OOMs again, pivot per the
   fallback plan (longer Loop84 seed8-style training, larger flow IDM, Wan2.2 frozen-encoder
   IDM, or a Wan2.2 feature-cache action-expert smoke test) and record the blocker.
+- **rerun2 ALSO OOM'd at epoch 17 (2026-06-09 ~18:55 UTC) — batch tuning ruled out**
+  Both seeds (batch32) completed epoch 16 then **OOM'd at epoch 17 again**, at the *same*
+  ~79 GB ceiling as batch64 (batch64 died allocating 64 MiB with 79.10 GiB used; batch32
+  died allocating 32 MiB with 79.12 GiB used). Same traceback
+  (`sample_action -> flow_head -> visual cross-attention`). Key inference: **the OOM ceiling
+  is batch-independent** — the retained autograd graph for 4 candidates x 16 sampler steps
+  fills all 80 GB regardless of batch; a smaller batch just completes more sampler steps
+  before hitting the same wall. So batch reduction cannot fix this, and neither can
+  `expandable_segments` (only ~0.9 GiB was reserved-but-free at the batch32 crash — it is a
+  genuine memory-capacity wall, not fragmentation). This is the real blocker for
+  sampled-action ranking.
+- **Decision: gradient-checkpoint the sampler (proper fix, not another batch retry)** The
+  principled fix is to wrap each per-step `flow_head` call inside `models.sample_action` in
+  `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)`, guarded by
+  `torch.is_grad_enabled()` so the eval/diagnostic (`no_grad`) paths are byte-for-byte
+  unchanged and only the ranking-scoring-with-grad path is affected. This recomputes each
+  sampler step's internal activations during backward instead of retaining all ~64 forwards,
+  dropping peak activation from O(4x16 forwards) to ~O(1 forward) with identical numerics
+  (RNG state preserved, so dropout is reproduced). Plan: implement, smoke-test that the
+  ranking step fits at batch64 with sane loss/backward, then relaunch Loop85 at batch64
+  (clean, unconfounded comparison to Loop84) as `_rerun3`.
+- **Goal context (2026-06-09, session goal)** Target set by the user: reach world-model
+  eval results **similar to or better than the Pi0.5-style Wan action-expert** on MetaWorld.
+  That reference is `output/pi05_wan_action_expert_train8_spe8_eval44_ep8_spe16_h4_prefixstate_crossattn_taskcvar_f025_w0125_seed109_e1200_h512_l6_lr1e4/metrics.json`
+  with **eval44 `val_model_sample_mse=2.6755`** (mean-action baseline `6.4164`). The current
+  best world-model IDM route is Loop84 seed8 eval44 `idm_mse=3.5509`, so the gap to close is
+  ~3.55 -> ~2.68. Loop85 ranking targets the future-usage gap; separate experiments will
+  target eval MSE directly (larger/longer IDM, more data, Wan frozen-encoder features, and
+  the Pi0.5-style backbone route).
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
