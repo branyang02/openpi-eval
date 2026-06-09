@@ -1883,17 +1883,17 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at 2026-06-09 02:10 UTC** Metrics were read from each
-  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 32 metric
+- **Partial metrics at 2026-06-09 02:15 UTC** Metrics were read from each
+  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 33 metric
   rows; best is epoch 31 with `idm_mse=5.745670`, current-repeated degradation
   `0.00976`, rank accuracy `0.189`, and real-vs-best-negative gap `-0.06957`. Latest
-  seed7 epoch 32 has `idm_mse=6.441767`, and is also seed7's strongest degradation so
-  far (`0.02074`). Seed7's strongest rank accuracy is epoch 30 (`0.214`). Seed8 has 32
-  metric rows; best action MSE is epoch 29 with
-  `idm_mse=5.737304`. Latest seed8 epoch 32 has `idm_mse=5.838291`, degradation
-  `0.03683`, rank accuracy `0.246`, and real-vs-best-negative gap `-0.08342`; it is
-  also seed8's strongest degradation so far. Seed8's strongest rank accuracy is epoch
-  29 (`0.294`).
+  seed7 epoch 33 has `idm_mse=6.052768`, degradation `0.01178`, rank accuracy `0.215`,
+  and gap `-0.09353`. Seed7's strongest degradation so far is epoch 32 (`0.02074`),
+  and strongest rank accuracy is latest epoch 33 (`0.215`). Seed8 has 33 metric rows;
+  best action MSE is epoch 29 with `idm_mse=5.737304`. Latest seed8 epoch 33 has
+  `idm_mse=6.306496`, degradation `0.02152`, rank accuracy `0.269`, and gap
+  `-0.05932`. Seed8's strongest degradation so far is epoch 32 (`0.03683`), and
+  strongest rank accuracy is epoch 29 (`0.294`).
   The future-usage gate is still false for both seeds.
 - **Interpretation so far** This remains a live data-scale check rather than a proven
   long-run candidate. Seed7 recovered to a new best by epoch 31, and seed8 still has the
@@ -1913,6 +1913,17 @@ is **`0.04420376801863313`**.
   deciding whether to spend GPU time on a true long run. If the best checkpoint stays
   near `5.8-5.9` with a negative gap, the next experiment should add a future-usage
   objective/regularizer rather than simply increasing epochs.
+- **Next ablation candidate if Loop84 stalls** Existing code already supports
+  sampled-action future ranking via `--idm-future-ranking-score-mode sampled_action`.
+  This is worth trying before new architecture code because Loop82 already showed that
+  teacher-forced endpoint ranking made the model sensitive to future perturbations while
+  failing to prefer the correct future. A concrete follow-up is the same train8/spe15
+  skip-1783 setup with:
+  `--idm-future-ranking-weight 0.05 --idm-future-ranking-start-epoch 16 --idm-future-ranking-ramp-epochs 16 --idm-future-ranking-repeated-current-negative --idm-future-ranking-shuffled-future-negative --idm-future-ranking-zero-future-negative --idm-future-ranking-score-mode sampled_action --idm-future-usage-score-mode sampled_action`.
+  Keep `eval_idm.py` held-out action MSE as the primary comparison to Loop80, and use
+  `diagnose_idm.py` with both `sampled_action` and `teacher_forced_endpoint` scoring to
+  tell whether the auxiliary objective improved real sampled actions or merely changed
+  the diagnostic surface.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
