@@ -1973,6 +1973,44 @@ is **`0.04420376801863313`**.
   accuracy `0.008896797153024912`, gap `-0.05414882312890049`, gate false. These first
   rows only confirm the ablation is running; they are not comparable to Loop84 best
   checkpoints yet.
+- **Why the original Loop85 stopped (diagnosed 2026-06-09 ~17:40 UTC)** The original
+  seed7/seed8 runs died at epoch 12 / epoch 11 respectively, both *before* the
+  epoch-16 ranking start, so `idm_future_ranking_weight_active` stayed `0.0` and no
+  sampled-action ranking was ever exercised. Root cause is operational, not a code
+  crash: the runs were launched in foreground PTY sessions (`25684` / `71492`) with no
+  `nohup`/`setsid` and no log redirect, so the training children received SIGHUP and were
+  killed when that session was torn down. Evidence: no `Traceback`/crash file anywhere
+  (the partial output dirs contain only `best_idm_checkpoint.pt` + `metrics.jsonl`, no
+  stderr log was ever captured), both H100s were idle and clean at diagnosis time
+  (`nvidia-smi`: 6 MiB each, no processes), no `train_idm.py` process was alive, and the
+  `metrics.jsonl` mtimes (05:30-05:33) match a clean stop mid-training rather than an OOM
+  or NaN. The partial dirs are left intact (not deleted) for reference.
+- **Loop85 rerun1 launch at 2026-06-09 ~17:40 UTC** Relaunched both seeds into fresh
+  `_rerun1` output dirs using a committed, reproducible launch script
+  (`agent_logs/loop85_rerun1_launch.sh`, git-ignored scratch dir) that reads the canonical
+  351-episode train split *programmatically* from Loop84 seed8's saved
+  `train_config.dataset.episodes` (verified count `351`, episode `1783` absent). The fix
+  for the prior death: each seed is launched fully detached via
+  `CUDA_VISIBLE_DEVICES=<gpu> setsid nohup uv run python train_idm.py ... > <log> 2>&1 < /dev/null &`,
+  so it reparents to PID 1 and survives PTY/session teardown, and all stdout/stderr is
+  captured to `agent_logs/loop85_rerun1_seed{7,8}.log` for crash debugging. Seed7 on
+  physical GPU0, seed8 on physical GPU1, each with `--device cuda:0` inside the masked
+  process. Exact flags match Loop84's `no_rank` recipe (patch-token cross-attention
+  `future_delta` flow IDM, `frame_delta=1`, `num_future_frames=4`, `action_horizon=4`,
+  `samples_per_episode=15`, deterministic flow sampling `--idm-flow-sample-noise-scale 0.0`,
+  `--early-stopping-patience 30`) plus the Loop85 ranking flags
+  (`--idm-future-ranking-weight 0.05`, `--idm-future-ranking-start-epoch 16`,
+  `--idm-future-ranking-ramp-epochs 16`, repeated-current/shuffled/zero future negatives,
+  `--idm-future-ranking-score-mode sampled_action`,
+  `--idm-future-usage-score-mode sampled_action`). At launch: setsid pids `3917564`
+  (seed7) / `3917565` (seed8), python children `3917570` / `3917571`, both with PPID 1.
+  Output dirs:
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed7_sampled_rank005_e120_rerun1`
+  and `..._seed8_sampled_rank005_e120_rerun1`.
+- **Minimum success criterion** Reach epoch 16+ so `idm_future_ranking_weight_active`
+  becomes nonzero; only then can sampled-action ranking be interpreted. Next checkpoint:
+  confirm first epoch-1 row is written (startup health), then watch the epoch-16 ranking
+  activation and compare best held-out vs Loop84 seed8 eval44 `idm_mse=3.5508617892409817`.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
