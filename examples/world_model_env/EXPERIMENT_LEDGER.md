@@ -1964,6 +1964,15 @@ is **`0.04420376801863313`**.
   current-repeated future-sensitivity gate, teacher-forced/sample-action ranking
   accuracy, and the real-vs-best-negative gap. If ranking improves but eval44 regresses
   badly, sweep a lower ranking weight before changing architecture.
+- **First metrics at 2026-06-09 04:58 UTC** Both runs reached GPU training and wrote
+  epoch-1 rows. Ranking weight is still `0.0` as expected before the epoch-16 start.
+  Seed7 epoch 1: `idm_mse=6.533620868289174`,
+  `idm_smooth_l1=1.2633888000271074`, sampled-action rank accuracy
+  `0.04092526690391459`, gap `-0.021285522039780836`, gate false. Seed8 epoch 1:
+  `idm_mse=6.798647897523493`, `idm_smooth_l1=1.224987654499312`, sampled-action rank
+  accuracy `0.008896797153024912`, gap `-0.05414882312890049`, gate false. These first
+  rows only confirm the ablation is running; they are not comparable to Loop84 best
+  checkpoints yet.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
