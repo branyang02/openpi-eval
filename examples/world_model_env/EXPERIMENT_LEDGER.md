@@ -1883,19 +1883,21 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at 2026-06-09 02:08 UTC** Metrics were read from each
-  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 31 metric
-  rows; best is latest epoch 31 with `idm_mse=5.745670`, current-repeated degradation
-  `0.00976`, rank accuracy `0.189`, and real-vs-best-negative gap `-0.06957`. Seed7's
-  strongest degradation so far is epoch 25 (`0.01680`), and strongest rank accuracy is
-  epoch 30 (`0.214`). Seed8 has 31 metric rows; best action MSE is epoch 29 with
-  `idm_mse=5.737304`; latest epoch 31 is `idm_mse=6.091643`, degradation `0.02015`,
-  rank accuracy `0.205`, and gap `-0.06988`. Seed8's strongest degradation so far is
-  epoch 26 (`0.03554`), and strongest rank accuracy is epoch 29 (`0.294`).
+- **Partial metrics at 2026-06-09 02:10 UTC** Metrics were read from each
+  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 32 metric
+  rows; best is epoch 31 with `idm_mse=5.745670`, current-repeated degradation
+  `0.00976`, rank accuracy `0.189`, and real-vs-best-negative gap `-0.06957`. Latest
+  seed7 epoch 32 has `idm_mse=6.441767`, and is also seed7's strongest degradation so
+  far (`0.02074`). Seed7's strongest rank accuracy is epoch 30 (`0.214`). Seed8 has 32
+  metric rows; best action MSE is epoch 29 with
+  `idm_mse=5.737304`. Latest seed8 epoch 32 has `idm_mse=5.838291`, degradation
+  `0.03683`, rank accuracy `0.246`, and real-vs-best-negative gap `-0.08342`; it is
+  also seed8's strongest degradation so far. Seed8's strongest rank accuracy is epoch
+  29 (`0.294`).
   The future-usage gate is still false for both seeds.
 - **Interpretation so far** This remains a live data-scale check rather than a proven
   long-run candidate. Seed7 recovered to a new best by epoch 31, and seed8 still has the
-  strongest future-sensitivity diagnostics in this run (`0.03554` degradation and
+  strongest future-sensitivity diagnostics in this run (`0.03683` degradation and
   `0.294` rank accuracy). However, neither seed has beaten Loop80's best internal
   `idm_mse=5.554099767980441` or Loop80's held-out eval44 `idm_mse=4.942809457489939`,
   and both still fail the future-usage gate because the real-vs-best-negative gap
