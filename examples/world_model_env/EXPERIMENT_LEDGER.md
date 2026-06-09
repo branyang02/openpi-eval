@@ -1883,20 +1883,19 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at 2026-06-09 02:16 UTC** Metrics were read from each
-  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 34 metric
+- **Partial metrics at 2026-06-09 02:19 UTC** Metrics were read from each
+  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 35 metric
   rows; best is epoch 31 with `idm_mse=5.745670`, current-repeated degradation
   `0.00976`, rank accuracy `0.189`, and real-vs-best-negative gap `-0.06957`. Latest
-  seed7 epoch 34 has `idm_mse=6.063624`, degradation `0.01666`, rank accuracy `0.247`,
-  and gap `-0.10370`. Seed7's strongest degradation so far is epoch 32 (`0.02074`),
-  and strongest rank accuracy is latest epoch 34 (`0.247`). Seed8 has 34 metric rows;
-  best action MSE is latest epoch 34 with `idm_mse=5.481802`,
-  `idm_smooth_l1=1.085813`, degradation `0.02123`, rank accuracy `0.244`, and gap
-  `-0.06466`. Seed8's strongest degradation so far is epoch 32 (`0.03683`), and
-  strongest rank accuracy is epoch 29 (`0.294`).
+  seed7 epoch 35 has `idm_mse=6.178269`, degradation `0.02303`, rank accuracy `0.281`,
+  and gap `-0.05097`; it is also seed7's strongest degradation and rank so far. Seed8
+  has 35 metric rows; best action MSE is latest epoch 35 with `idm_mse=5.445489`,
+  `idm_smooth_l1=1.058280`, degradation `0.03389`, rank accuracy `0.299`, and gap
+  `-0.08454`. Seed8's strongest degradation so far is epoch 32 (`0.03683`), and
+  strongest rank accuracy is latest epoch 35 (`0.299`).
   The future-usage gate is still false for both seeds.
 - **Interpretation so far** This remains a live data-scale check rather than a proven
-  long-run candidate. Seed8 epoch 34 is the first checkpoint in this run to beat
+  long-run candidate. Seed8 epoch 35 beats
   Loop80's best internal `idm_mse=5.554099767980441`, so the train8/spe15 data-scale
   change now has real action-MSE signal. However, it still does not beat Loop80's
   held-out eval44 `idm_mse=4.942809457489939` because that broader eval has not been run
