@@ -1911,6 +1911,17 @@ is **`0.04420376801863313`**.
   deciding whether to spend GPU time on a true long run. If the best checkpoint stays
   near `5.8-5.9` with a negative gap, the next experiment should add a future-usage
   objective/regularizer rather than simply increasing epochs.
+- **Ready eval44 recipe** Recover the comparable held-out episodes from
+  `output/eval_idm_flow_patch_crossattn_futuredelta_gt_train8_spe8_eval44_spe15_h4_seed7_no_rank/eval_metrics.json`.
+  The split is currently:
+  `2 102 198 298 398 498 594 694 794 894 989 1089 1182 1282 1382 1482 1582 1682 1782 1882 1982 2082 2182 2282 2382 2480 2580 2680 2780 2880 2980 3062 3161 3250 3350 3445 3545 3645 3745 3845 3945 4034 4134 4234`.
+  After both training processes finish and GPUs are free, evaluate
+  `best_idm_checkpoint.pt` for each seed with `eval_idm.py` using
+  `--dataset-source lerobot --repo-id brandonyang/metaworld_ml45 --image-keys corner4.image --image-size 64 --frame-delta 1 --num-future-frames 4 --action-horizon 4 --samples-per-episode 15 --batch-size 64 --prediction-mode sample --flow-noise-scale 0.0 --flow-num-samples 1`
+  and the episode list above. Use disjoint output dirs named
+  `output/eval_idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_eval44_spe15_h4_seed{7,8}_no_rank_e120`.
+  Then run `diagnose_idm.py` on the same split with `--future-usage-score-mode teacher_forced_endpoint`;
+  if time allows, repeat diagnostics with `--future-usage-score-mode sampled_action`.
 - **Next ablation candidate if Loop84 stalls** Existing code already supports
   sampled-action future ranking via `--idm-future-ranking-score-mode sampled_action`.
   This is worth trying before new architecture code because Loop82 already showed that
