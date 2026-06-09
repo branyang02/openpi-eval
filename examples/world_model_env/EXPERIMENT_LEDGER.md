@@ -2113,6 +2113,20 @@ is **`0.04420376801863313`**.
   GPU0 reassigned to Loop86 (below). NOTE: `pkill -f "<dir-substring>"` also killed the
   Monitor and its own shell because the pattern matched their command lines — prefer killing
   by explicit PID or a pattern that cannot match the monitor.
+- **OOM fix CONFIRMED on the real run (2026-06-09 ~20:00 UTC)** Loop85 rerun3 seed8 passed
+  **epoch 17** — the exact step that OOM'd in rerun1 (batch64) and rerun2 (batch32) — with
+  ranking now active (`idm_future_ranking_weight_active=0.003125`, the first ramp step;
+  `train_idm_future_ranking_loss=1.4296`). GPU1 peak is ~59 GB at batch64, comfortably under
+  80 GB, vs the prior >80 GB wall. The gradient-checkpoint fix works end-to-end on real data.
+- **Early ranking caveat (watch, do not yet conclude)** As ranking switches on, Loop85 seed8
+  `idm_mse` rose `6.00 (ep15) -> 6.60 (ep16) -> 6.86 (ep17)` and the future-usage gap went
+  `-0.254 -> -0.279 -> -0.411`. The weight is still tiny (ramping 0.003 -> 0.05 over 16 epochs),
+  and idm_mse was already drifting up before onset, so this is not yet interpretable — but it
+  is an early hint that the sampled-action ranking term may trade off action MSE. Reassess at
+  ~epoch 30; if ranking is clearly hurting eval MSE without improving the gap, stop it and free
+  GPU1 for a direct-MSE experiment.
+- **Loop86 early trajectory** Data-scaled clean-split IDM is converging: internal idm_mse
+  `6.28 (ep1) -> 6.18 (ep3)`, declining normally.
 
 ### Why pi05 (2.6755) beats the IDM (3.5509), and the data-scaling + leakage findings
 - **pi05 action-expert gap analysis** The Pi0.5-style Wan action-expert reaches eval44
