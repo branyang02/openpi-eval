@@ -1937,6 +1937,34 @@ is **`0.04420376801863313`**.
   tell whether the auxiliary objective improved real sampled actions or merely changed
   the diagnostic surface.
 
+### Loop85 live launch: sampled-action future-ranking ablation
+- **Question** Can the Loop84 train8/spe15 setup keep its strong eval44 action MSE while
+  improving the future-ranking failure mode? Loop84 proved the data-scale recipe is not
+  future-blind and improves held-out action MSE, but both seeds still had negative
+  real-vs-best-negative ranking gaps.
+- **Stack / run shape** Same train8/spe15 skip-1783 data split and same patch-token
+  cross-attention `future_delta` flow IDM as Loop84, but with sampled-action future
+  ranking enabled: `--idm-future-ranking-weight 0.05`,
+  `--idm-future-ranking-start-epoch 16`, `--idm-future-ranking-ramp-epochs 16`,
+  repeated-current/shuffled/zero future negatives,
+  `--idm-future-ranking-score-mode sampled_action`, and
+  `--idm-future-usage-score-mode sampled_action`.
+- **Live artifacts / processes as of launch** Output dirs are
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed7_sampled_rank005_e120`
+  and
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed8_sampled_rank005_e120`.
+  Seed7 launched on physical GPU0 with PTY session `25684`; seed8 launched on physical
+  GPU1 with PTY session `71492`. Python children observed after launch were `3731854`
+  for seed7 and `3732290` for seed8. An initial seed8 launch with a hand-typed episode
+  list typo was interrupted during dataset construction before an output dir was
+  written; the active seed8 launch uses the canonical episode list read from Loop84's
+  saved `train_config`.
+- **Next checks** Wait for `metrics.jsonl` rows before interpreting anything. Primary
+  comparisons are Loop84 seed8 eval44 `idm_mse=3.5508617892409817`, the
+  current-repeated future-sensitivity gate, teacher-forced/sample-action ranking
+  accuracy, and the real-vs-best-negative gap. If ranking improves but eval44 regresses
+  badly, sweep a lower ranking weight before changing architecture.
+
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
   assembly-only canonical split.
