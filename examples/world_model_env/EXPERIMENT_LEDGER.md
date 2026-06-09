@@ -1883,27 +1883,25 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at epoch 27** Metrics were read from each `metrics.jsonl`.
-  Seed7 has 27 metric rows; best is epoch 26 with `idm_mse=5.927279869432551`,
-  `future_usage_current_repeated_degradation=0.008682754938076399`,
-  `future_usage_rank_accuracy=0.2117437722419929`, and
-  `future_usage_real_vs_best_negative_gap=-0.07141781065387658`; latest epoch 27 is
-  `idm_mse=6.14552779554048`, and the gate is still false. Seed8 has 27 metric rows;
-  best action MSE is latest epoch 27 with `idm_mse=5.7500336127773295`,
-  `degradation=0.014037422066905744`, `rank_accuracy=0.24555160142348753`, and gap
-  `-0.05950249705026158`. Seed8's strongest future-replacement degradation so far is
-  epoch 26 with
-  `degradation=0.03554381149095148`, but that checkpoint has `idm_mse=5.962576027866785`
-  and the gate is still false.
-- **Interpretation so far** This is a better signal than the very early epochs because
-  seed8 repeatedly shows nontrivial current-repeated degradation and late action-MSE
-  recovery, while seed7 also recovered to a new best at epoch 26. Seed8's epoch 27
-  result is the strongest new sign from this run. However, neither seed
-  has beaten Loop80's best internal `idm_mse=5.554099767980441` or Loop80's held-out
-  eval44 `idm_mse=4.942809457489939`, and both still fail the future-usage gate because
-  the real-vs-best-negative gap remains negative. This supports continuing the run to
-  early stopping, but not yet launching a much larger run without either better action
-  MSE or stronger future-conditioning pressure.
+- **Partial metrics at 2026-06-09 02:08 UTC** Metrics were read from each
+  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 31 metric
+  rows; best is latest epoch 31 with `idm_mse=5.745670`, current-repeated degradation
+  `0.00976`, rank accuracy `0.189`, and real-vs-best-negative gap `-0.06957`. Seed7's
+  strongest degradation so far is epoch 25 (`0.01680`), and strongest rank accuracy is
+  epoch 30 (`0.214`). Seed8 has 31 metric rows; best action MSE is epoch 29 with
+  `idm_mse=5.737304`; latest epoch 31 is `idm_mse=6.091643`, degradation `0.02015`,
+  rank accuracy `0.205`, and gap `-0.06988`. Seed8's strongest degradation so far is
+  epoch 26 (`0.03554`), and strongest rank accuracy is epoch 29 (`0.294`).
+  The future-usage gate is still false for both seeds.
+- **Interpretation so far** This remains a live data-scale check rather than a proven
+  long-run candidate. Seed7 recovered to a new best by epoch 31, and seed8 still has the
+  strongest future-sensitivity diagnostics in this run (`0.03554` degradation and
+  `0.294` rank accuracy). However, neither seed has beaten Loop80's best internal
+  `idm_mse=5.554099767980441` or Loop80's held-out eval44 `idm_mse=4.942809457489939`,
+  and both still fail the future-usage gate because the real-vs-best-negative gap
+  remains negative. This supports continuing to early stopping, but not launching a much
+  larger run yet without either better action MSE or stronger future-conditioning
+  pressure.
 - **Handoff / next steps** Let both live runs continue unless they clearly diverge. Poll
   with:
   `tail -n 3 output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed{7,8}_no_rank_e120/metrics.jsonl`.
