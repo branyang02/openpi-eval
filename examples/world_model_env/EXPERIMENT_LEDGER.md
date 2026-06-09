@@ -2022,6 +2022,41 @@ is **`0.04420376801863313`**.
   `idm_smooth_l1=1.224980826055452`, sampled-action rank accuracy `0.008896797153024912`,
   gap `-0.05414821149191398` (vs original `idm_mse=6.798647897523493`).
   `idm_future_ranking_weight_active` is still `0.0` as expected before the epoch-16 start.
+- **rerun1 OOM at ranking activation (2026-06-09 ~18:15 UTC) — reproducible finding**
+  Both seeds completed epoch 16 with ranking still off (`idm_future_ranking_weight_active=0.0`,
+  start-epoch 16 activates at epoch 17), then **both OOM'd at epoch 17**, the first
+  ranking-active training step, with identical `torch.OutOfMemoryError` on an 80 GB H100
+  (`79.10 GiB in use, 74 MiB free, tried to allocate 64 MiB`). This is **not fragmentation**
+  (only ~37 MiB was reserved-but-unallocated) — it is a genuine >80 GB requirement. Root
+  cause (traceback `train_lib._flow_sampled_action_prediction -> models.sample_action ->
+  flow_head -> visual cross-attention`): `score_mode=sampled_action` scores the real future
+  *and all 3 negative candidates* (repeated-current, shuffled-future, zero-future) by running
+  the full deterministic 16-step flow sampler `sample_action` (which has no `torch.no_grad`),
+  so ~4x16 = 64 transformer forward passes' worth of activations are retained simultaneously
+  for backprop. At `batch_size=64` this exceeds 80 GB. (Teacher-forced endpoint scoring is a
+  single denoising step per candidate, which is why Loop84-style ranking never hit this.)
+  Last good rows before the crash: seed7 epoch 16 `idm_mse=5.882790154833811`, seed8 the
+  same epoch boundary; the runs left only `metrics.jsonl` (16 rows) and a stale
+  `best_idm_checkpoint.pt`, no `metrics.json`. Partial `_rerun1` dirs left intact.
+- **Loop85 rerun2 launch (attempt 3) at 2026-06-09 ~18:16 UTC — OOM fix** Relaunched both
+  seeds into fresh `_rerun2` dirs via `agent_logs/loop85_rerun2_launch.sh` with two changes
+  and nothing else: `--batch-size 32` (was 64; halves the ranking-step graph — base training
+  used only ~20 GB so there is ample headroom; estimated rerun2 peak ~40 GB) and
+  `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. **All ranking semantics are unchanged**
+  (same 3 negatives, `--idm-future-ranking-score-mode sampled_action`,
+  `--idm-future-usage-score-mode sampled_action`, 16 flow sampling steps, weight 0.05,
+  start-epoch 16, ramp 16). Detached the same way (`setsid nohup ... </dev/null &`, PPID 1):
+  seed7 GPU0 child `3929964`, seed8 GPU1 child `3929965`. Output dirs
+  `output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed{7,8}_sampled_rank005_e120_rerun2`,
+  logs `agent_logs/loop85_rerun2_seed{7,8}.log`.
+  **Caveat:** batch size now differs from Loop84's no-rank baseline (64), so a rerun2-vs-Loop84
+  eval44 MSE delta confounds ranking with batch size. The ranking-gap diagnostic
+  (`future_usage_real_vs_best_negative_gap`) is batch-independent, so the cleanest read on
+  whether sampled-action ranking helps is whether that gap becomes less negative/positive
+  once ranking is active (epoch 17+). New minimum success bar: survive past epoch 17 with
+  `idm_future_ranking_weight_active>0`. This is attempt 3; if it OOMs again, pivot per the
+  fallback plan (longer Loop84 seed8-style training, larger flow IDM, Wan2.2 frozen-encoder
+  IDM, or a Wan2.2 feature-cache action-expert smoke test) and record the blocker.
 
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
