@@ -1895,37 +1895,36 @@ is **`0.04420376801863313`**.
   teacher-forced rank accuracy `0.3196969696969697` with gap
   `-0.018344260661891012`; sampled-action rank accuracy `0.36818181818181817` with gap
   `-0.08071140588232965`.
-- **Seed8 live metrics at 2026-06-09 03:46 UTC** Seed8 is still active. It has 62
-  metric rows; best action MSE remains epoch 53 with `idm_mse=5.075420` and
-  `idm_smooth_l1=1.004757`. Latest epoch 62 has `idm_mse=5.280811`; the future-usage
-  gate remains false.
-- **Interpretation so far** The train8/spe15 data-scale change now has real held-out
-  action-MSE signal: seed7 improves Loop80 eval44 despite its weaker internal validation
-  MSE. The seed7 checkpoint is not collapsed/future-blind under the current-repeated
-  sensitivity gate, but future candidate ranking is still weak because real futures are
-  not reliably ranked above negative futures. This supports evaluating seed8 when it
-  finishes, then trying a sampled-action future-ranking objective if ranking remains the
-  main failure mode.
-- **Handoff / next steps** Let seed8 continue unless it clearly diverges. Poll
-  with:
-  `tail -n 3 output/idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_h4_seed{7,8}_no_rank_e120/metrics.jsonl`.
-  When seed8 finishes, read `metrics.json`, then evaluate the best checkpoint on the
-  Loop80 eval44 third-demo `spe15` split and run `diagnose_idm.py` with
-  `--future-usage-score-mode teacher_forced_endpoint`. Compare against Loop80 before
-  deciding whether to spend GPU time on a true long run. If seed8 repeats seed7's
-  eval44 improvement while ranking stays weak, the next experiment should add a
-  future-usage objective/regularizer rather than simply increasing epochs.
-- **Ready eval44 recipe** Recover the comparable held-out episodes from
+- **Seed8 final + eval44 at 2026-06-09 04:46 UTC** Seed8 stopped early at epoch 83.
+  Its best internal checkpoint is epoch 53 with `idm_mse=5.075419605838871` and
+  `idm_smooth_l1=1.0047574094181808`; final epoch 83 had
+  `idm_mse=5.290144353574705`. Held-out eval44 third-demo `spe15` on
+  `best_idm_checkpoint.pt` scored `idm_mse=3.5508617892409817`,
+  `idm_smooth_l1=0.5055585572213838`, over `660` samples, versus mean-action baseline
+  `idm_mse=6.477916971842448`. Teacher-forced diagnostics on the same split report
+  `future_blind=false`, current-repeated degradation `0.6936987876892089`, and
+  current-repeated output delta `0.4009952653538097`. Future ranking is improved but
+  still weak: teacher-forced rank accuracy `0.3484848484848485` with gap
+  `-0.021855589205568487`; sampled-action rank accuracy `0.4075757575757576` with gap
+  `-0.05565311990000985`.
+- **Interpretation** The train8/spe15 data-scale change is a real held-out
+  action-MSE improvement over Loop80: seed7 eval44 is `4.181991880590266`, and seed8
+  eval44 is `3.5508617892409817`, both below Loop80 eval44
+  `4.942809457489939`. Both checkpoints are not collapsed/future-blind under the
+  current-repeated sensitivity gate, and seed8 is the stronger candidate. However, both
+  still have negative real-vs-best-negative ranking gaps, so real futures are not
+  reliably ranked above negative futures. The next experiment should add a future-usage
+  objective/regularizer, preferably sampled-action future ranking, rather than simply
+  increasing epochs again.
+- **Eval44 recipe used** The comparable held-out episodes were recovered from
   `output/eval_idm_flow_patch_crossattn_futuredelta_gt_train8_spe8_eval44_spe15_h4_seed7_no_rank/eval_metrics.json`.
   The split is currently:
   `2 102 198 298 398 498 594 694 794 894 989 1089 1182 1282 1382 1482 1582 1682 1782 1882 1982 2082 2182 2282 2382 2480 2580 2680 2780 2880 2980 3062 3161 3250 3350 3445 3545 3645 3745 3845 3945 4034 4134 4234`.
-  After both training processes finish and GPUs are free, evaluate
-  `best_idm_checkpoint.pt` for each seed with `eval_idm.py` using
+  Each `best_idm_checkpoint.pt` was evaluated with `eval_idm.py` using
   `--dataset-source lerobot --repo-id brandonyang/metaworld_ml45 --image-keys corner4.image --image-size 64 --frame-delta 1 --num-future-frames 4 --action-horizon 4 --samples-per-episode 15 --batch-size 64 --prediction-mode sample --flow-noise-scale 0.0 --flow-num-samples 1`
-  and the episode list above. Use disjoint output dirs named
-  `output/eval_idm_flow_patch_crossattn_futuredelta_gt_train8_spe15_skip1783_eval44_spe15_h4_seed{7,8}_no_rank_e120`.
-  Then run `diagnose_idm.py` on the same split with `--future-usage-score-mode teacher_forced_endpoint`;
-  if time allows, repeat diagnostics with `--future-usage-score-mode sampled_action`.
+  and the episode list above. Diagnostics were run on the same split with both
+  `--future-usage-score-mode teacher_forced_endpoint` and
+  `--future-usage-score-mode sampled_action`.
 - **Next ablation candidate if Loop84 stalls** Existing code already supports
   sampled-action future ranking via `--idm-future-ranking-score-mode sampled_action`.
   This is worth trying before new architecture code because Loop82 already showed that
