@@ -1883,16 +1883,17 @@ is **`0.04420376801863313`**.
   parents observed by `ps` were `3497675` (seed7 uv wrapper) and `3497694` (seed8 uv
   wrapper), with Python children `3497720` and `3497727`. In this Codex thread only,
   PTY sessions are `26360` and `51815`.
-- **Partial metrics at 2026-06-09 02:19 UTC** Metrics were read from each
-  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 35 metric
+- **Partial metrics at 2026-06-09 02:33 UTC** Metrics were read from each
+  `metrics.jsonl`; both runs are still active and are mid-training. Seed7 has 39 metric
   rows; best is epoch 31 with `idm_mse=5.745670`, current-repeated degradation
   `0.00976`, rank accuracy `0.189`, and real-vs-best-negative gap `-0.06957`. Latest
-  seed7 epoch 35 has `idm_mse=6.178269`, degradation `0.02303`, rank accuracy `0.281`,
-  and gap `-0.05097`; it is also seed7's strongest degradation and rank so far. Seed8
-  has 35 metric rows; best action MSE is latest epoch 35 with `idm_mse=5.445489`,
+  seed7 epoch 39 has `idm_mse=6.090747`; seed7's strongest degradation so far is epoch
+  38 (`0.02800`), and strongest rank accuracy is epoch 35 (`0.281`). Seed8 has 39
+  metric rows; best action MSE is epoch 35 with `idm_mse=5.445489`,
   `idm_smooth_l1=1.058280`, degradation `0.03389`, rank accuracy `0.299`, and gap
-  `-0.08454`. Seed8's strongest degradation so far is epoch 32 (`0.03683`), and
-  strongest rank accuracy is latest epoch 35 (`0.299`).
+  `-0.08454`. Latest seed8 epoch 39 has `idm_mse=5.492142`; it is also seed8's
+  strongest degradation so far (`0.04524`). Seed8's strongest rank accuracy is still
+  epoch 35 (`0.299`).
   The future-usage gate is still false for both seeds.
 - **Interpretation so far** This remains a live data-scale check rather than a proven
   long-run candidate. Seed8 epoch 35 beats
