@@ -2181,6 +2181,28 @@ is **`0.04420376801863313`**.
   (c) richer/frozen Wan features for the IDM, (d) extend the pi05 action-expert route with
   more data, all measured on a clean held-out split.
 
+### Loop85 ranking VERDICT (negative) + Loop87 (clean-48 data-scaling) launch
+- **Loop85 sampled-action ranking does NOT help (2026-06-10 ~00:40 UTC)** rerun3 seed8 ran to
+  epoch 51 with ranking fully ramped (weight 0.05 from ~ep32). Result is negative on both axes:
+  best internal idm_mse `5.585 @ep31` (before full ramp), degrading to `~5.7-5.9` once ranking
+  was at full weight; and the future-usage gap stayed bad (`~-0.23`), *worse* than the no-rank
+  Loop84 seed8 gap `-0.05565`. So sampled-action future ranking (weight 0.05, start-epoch 16,
+  repeated-current/shuffled/zero negatives) trades off action MSE without fixing the ranking
+  gap — it should not be part of the pi05-chasing recipe at these settings. The OOM
+  gradient-checkpoint fix is validated and retained for any future ranking work. Stopped the run
+  (by explicit PID) to free GPU1.
+- **Loop87 launch: clean-48 data-scaling** To extend the promising data-scaling lever, launched
+  the same clean-split recipe at **48 demos/task (2112 eps)** on the freed GPU1, giving the
+  honest data-scaling curve 8 -> 24 -> 48. `agent_logs/loop87_dataclean48_launch.sh` (reads
+  `output/.clean_train48_episodes.json`; verified 2112 eps, 48/task, 0 eval overlap, all
+  length>=19), detached PPID 1. Output dir
+  `output/idm_flow_patch_crossattn_futuredelta_gt_dataclean_train48_skipeval44_h4_seed8_no_rank_e120`,
+  log `agent_logs/loop86_dataclean48_seed8.log` (filename carries `loop86` due to the sed-based
+  launcher derivation; content is the clean-48 run). Now running alongside Loop86 (clean-24).
+- **Still pending: clean-8 baseline** To cleanly attribute the data-scaling effect (vs the
+  clean-vs-leaky eval change), a clean-split **8 demos/task** baseline should be run on the
+  honest eval; queued for the next freed GPU.
+
 ### Loops 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 — task-diverse flow-DiT IDM / Wan VAE probes
 - **Scope** These are task-diverse flow-DiT IDM experiments, not the older
   assembly-only canonical split.
