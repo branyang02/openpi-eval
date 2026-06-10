@@ -2127,6 +2127,13 @@ is **`0.04420376801863313`**.
   GPU1 for a direct-MSE experiment.
 - **Loop86 early trajectory** Data-scaled clean-split IDM is converging: internal idm_mse
   `6.28 (ep1) -> 6.18 (ep3)`, declining normally.
+- **Data-scaling looks promising at matched epochs (2026-06-10 ~00:?? UTC, ep10)** Comparing
+  internal idm_mse best-by-epoch-10: **Loop86 (clean, 24/task) = 5.65** vs **Loop84 (leaky,
+  8/task) = 6.00** — Loop86 is already lower *despite* a harder honest eval (clean held-out
+  windows vs leaky). Per-epoch numbers are noisy (flow-sampling eval bounces ~5.65-6.5), so
+  this is tentative, but it is an early positive signal that 3x data improves generalization.
+  Loop84's internal floor was 5.07 at epoch 53; watch whether Loop86 beats that by epoch ~50,
+  then confirm with held-out eval44. If confirmed, scale to 48 demos/task next.
 
 ### Why pi05 (2.6755) beats the IDM (3.5509), and the data-scaling + leakage findings
 - **pi05 action-expert gap analysis** The Pi0.5-style Wan action-expert reaches eval44
