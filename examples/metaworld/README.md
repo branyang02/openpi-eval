@@ -97,6 +97,10 @@ MUJOCO_GL=egl uv run examples/metaworld/eval_all.py --tasks reach-v3 push-v3 pic
 ```
 
 Outputs default to `examples/metaworld/output/`. `results.json` is saved incrementally.
+Each episode also writes an `episode_XXX.json` sidecar next to its video recording the
+per-env success/reward and per-request inference latency — the world-model server's
+`server_timing.infer_ms` plus client round-trip — so Wan latency/quality tradeoffs are
+auditable after a run.
 
 Generated results are written to `examples/metaworld/output/` and should be
 published only after a fresh release evaluation.
