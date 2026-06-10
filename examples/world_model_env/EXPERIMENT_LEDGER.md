@@ -2181,6 +2181,29 @@ is **`0.04420376801863313`**.
   (c) richer/frozen Wan features for the IDM, (d) extend the pi05 action-expert route with
   more data, all measured on a clean held-out split.
 
+### *** HEADLINE: data-scaled clean-split IDM beats pi05 on an HONEST held-out eval44 ***
+- **Loop86 clean-24 held-out eval44 = 2.496 (2026-06-10 ~06:?? UTC)** Ran the true held-out
+  eval44 on Loop86's best checkpoint (internal best @ep33, run not yet converged) via
+  `eval_idm.py` with the standard recipe (lerobot, corner4 64px, frame_delta 1,
+  num_future_frames 4, action_horizon 4, spe15, prediction-mode sample, flow_noise 0.0,
+  flow_num_samples 1) on the 44 held-out episodes: **`idm_mse=2.4961`**, `idm_smooth_l1=0.4154`,
+  660 samples (`output/eval_loop86_clean24_ep33_heldout_eval44/eval_metrics.json`). This BEATS
+  the pi05 action-expert target **`val_model_sample_mse=2.6755`** AND the prior IDM best
+  `3.5509` — and crucially Loop86's eval is **honest** (the 44 eval episodes were EXCLUDED from
+  training) whereas the pi05/IDM baselines are **leaky** (eval episodes were in training). Scale
+  is comparable: Loop84's eval44 mean-action baseline was `6.4779`, pi05's `6.4164` (~same), and
+  `smooth_l1=0.415` confirms it is not a degenerate mean-predictor. **Interpretation:** scaling
+  training data from 8 -> 24 clean demos/task makes the decoded-video IDM generalize to unseen
+  episodes better than the leaky pi05 number — i.e. the world-model route reaches/exceeds pi05
+  parity on MetaWorld action MSE. **How this was found:** by evaluating the REAL metric on an
+  early checkpoint instead of waiting for full convergence (good practice: judge on the target
+  metric early, not the internal proxy).
+- **Caveats / validation still owed (do NOT over-claim yet)** Single seed (seed8), single
+  checkpoint (ep33). To confirm: (a) eval Loop86's final/converged best; (b) eval Loop87
+  (clean-48) for the 48/task point; (c) run a clean-8 baseline to attribute the gain to data
+  scaling vs the clean-vs-leaky eval change; (d) ideally a second seed (seed7); (e) consider
+  closed-loop MetaWorld task success as the ultimate metric, not just action MSE.
+
 ### Loop85 ranking VERDICT (negative) + Loop87 (clean-48 data-scaling) launch
 - **Loop85 sampled-action ranking does NOT help (2026-06-10 ~00:40 UTC)** rerun3 seed8 ran to
   epoch 51 with ranking fully ramped (weight 0.05 from ~ep32). Result is negative on both axes:
