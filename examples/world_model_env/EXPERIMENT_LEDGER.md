@@ -2181,7 +2181,32 @@ is **`0.04420376801863313`**.
   (c) richer/frozen Wan features for the IDM, (d) extend the pi05 action-expert route with
   more data, all measured on a clean held-out split.
 
-### *** HEADLINE: data-scaled clean-split IDM beats pi05 on an HONEST held-out eval44 ***
+### *** CRITICAL CAVEAT (2026-06-10): the "headline" below is an ORACLE number, NOT deployable ***
+- **The 2.496 uses GROUND-TRUTH future frames, not generated ones.** `eval_idm.py` was run
+  without `--cached-future-dir`/`--generated-wan-latent-cache-dir`, so the IDM was fed the REAL
+  dataset future frames. So `idm_mse=2.496` is an **oracle / upper-bound**: "if a world model
+  produced perfect futures, the IDM recovers actions at 2.496 MSE." It is NOT a deployable
+  policy number.
+- **No world model is being trained or run in Loop84-88.** These experiments only train/evaluate
+  the IDM on GT futures. At inference the decoded-video route requires
+  `current frame + task text -> Wan2.2 world model generates 4 future frames -> IDM -> actions`;
+  that generation step is currently NOT run in these evals.
+- **The pi05 comparison was NOT apples-to-apples.** pi05's action-expert conditions on
+  `wan_prefix_state` = Wan features from the CURRENT frame (deployable, no oracle future), so its
+  2.6755 is a deployable number while our 2.496 has an oracle-future advantage. Claiming we "beat
+  pi05" was overstated. The legitimate claims are narrower: data-scaling lowers the IDM's *oracle*
+  action MSE and improves held-out generalization.
+- **Deployable evaluation is the real test (now the priority).** Measure the data-scaled IDM with
+  Wan-GENERATED futures (the "generated-Wan gap", real in earlier loops) and ultimately
+  closed-loop MetaWorld task success. Tooling exists (`cache_future_rollouts.py` ->
+  `Wan22FutureGenerator` base Wan2.2 or a Wan LoRA; `eval_idm.py --cached-future-dir`;
+  `serve_world_model.py`), but existing Wan LoRAs are task-narrow (ep0-23), so a 44-task
+  deployable eval needs base Wan2.2 zero-shot or a broad Wan finetune. NOTE: the deployable
+  number will be HIGHER (worse) than 2.496. Alternative honest path to a deployable beat-pi05:
+  apply the same data-scaling to the pi05-style action-expert route (route 2), which is already
+  deployable at 2.6755 with only 8 demos/task.
+
+### *** HEADLINE (ORACLE, see caveat above): data-scaled clean-split IDM oracle eval44 = 2.496 ***
 - **Loop86 clean-24 held-out eval44 = 2.496 (2026-06-10 ~06:?? UTC)** Ran the true held-out
   eval44 on Loop86's best checkpoint (internal best @ep33, run not yet converged) via
   `eval_idm.py` with the standard recipe (lerobot, corner4 64px, frame_delta 1,
